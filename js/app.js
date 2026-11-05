@@ -142,7 +142,8 @@ function render() {
 function cabecalho() {
   const on = navigator.onLine;
   return `<header class="top">
-    <div><b>${esc(S.usuario.nome || S.usuario.login)}</b><small>${esc(perfilCfg().nome)}</small></div>
+    <img class="marca" src="img/icone-192.png" alt="">
+    <div class="quem"><b>${esc(S.usuario.nome || S.usuario.login)}</b><small>${esc(perfilCfg().nome)}</small></div>
     <div class="st ${on ? 'on' : 'off'}">${S.sincronizando ? '⟳ sincronizando' : on ? '● online' : '● offline'}${S.outbox.length ? ` · ${S.outbox.length} pendente(s)` : ''}</div>
   </header>`;
 }
@@ -150,7 +151,7 @@ function cabecalho() {
 /* TELA 1 — LOGIN */
 function tLogin() {
   return `<section class="login">
-    <div class="logo">ROTAS<span>de execução</span></div>
+    <div class="logo"><img src="img/logo.png" alt="Lince Distribuidora"><span>Rotas de execução</span></div>
     ${S.msg ? `<div class="aviso erro">${esc(S.msg)}</div>` : ''}
     <form id="fLogin">
       <label>Login<input name="login" autocomplete="username" autocapitalize="none" required value="${esc(S._loginDigitado || S.usuario?.login || '')}"></label>
