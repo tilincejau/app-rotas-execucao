@@ -1,8 +1,8 @@
 // Service worker: guarda o app no aparelho para abrir sem internet.
 // Ao publicar uma nova versão, aumente o número abaixo.
-const VERSAO = 'rotas-v2';
+const VERSAO = 'rotas-v3';
 const ARQUIVOS = ['./', 'index.html', 'css/app.css', 'js/config.js', 'js/regras.js', 'js/db.js', 'js/app.js',
-  'manifest.webmanifest', 'img/icone.svg', 'img/icone-192.png'];
+  'manifest.webmanifest', 'img/icone-192.png', 'img/logo.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSAO).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting()));
