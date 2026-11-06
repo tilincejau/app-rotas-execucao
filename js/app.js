@@ -24,6 +24,7 @@ async function iniciar() {
   const pac = await DB.get('pacote');
   if (pac) carregarPacote(pac);
   S.draft = (await DB.get('rascunho')) || null;
+  S.enviados = (await DB.get('enviados')) || [];
   S.tela = S.token && S.pacote ? 'resumo' : 'login';
   render();
   if (S.tela === 'resumo') sincronizar();
@@ -48,7 +49,13 @@ async function sincronizar(forcarDados) {
     for (const v of [...S.outbox]) {
       const r = await API.chamar({ acao: 'enviar', token: S.token, visita: v }, 120000);
       if (r.erro === 'SESSAO_EXPIRADA') return sair('Sessão expirada. Entre novamente.');
-      if (r.ok) S.outbox = S.outbox.filter(x => x.id !== v.id);
+      if (r.ok) {
+        S.outbox = S.outbox.filter(x => x.id !== v.id);
+        // cópia local do que já foi enviado: a visita nunca some da tela, mesmo se a lista do servidor atrasar
+        S.enviados = (S.enviados || []).filter(x => x.mes === mesAtual() && x.id !== v.id);
+        S.enviados.push({ id: v.id, data: v.data, mes: v.mes, cod: v.cod, objetivo: v.objetivo, objetivoNome: v.objetivoNome, vendedor: v.vend, ...v.resumo });
+        await DB.set('enviados', S.enviados);
+      }
       else { v.erroEnvio = r.msg || r.erro; }
       await DB.set('outbox', S.outbox);
     }
@@ -93,12 +100,14 @@ async function sair(msg) {
 /* ------------------------------ CONSULTAS ------------------------------ */
 function minhasVisitas() {
   const mes = mesAtual(), me = S.usuario.login;
-  const env = S.visitasServ.filter(v => v.login === me && v.mes === mes);
+  const env = S.visitasServ.filter(v => String(v.login).toLowerCase() === me && String(v.mes).slice(0, 7) === mes);
   const ids = new Set(env.map(v => v.id));
+  const locais = (S.enviados || []).filter(v => v.mes === mes && !ids.has(v.id));
+  locais.forEach(v => ids.add(v.id));
   const pend = S.outbox.filter(v => v.mes === mes && !ids.has(v.id)).map(v => ({
     id: v.id, data: v.data, cod: v.cod, objetivo: v.objetivo, objetivoNome: v.objetivoNome, vendedor: v.vend,
     pendente: true, erro: v.erroEnvio, ...v.resumo }));
-  return [...pend, ...env];
+  return [...pend, ...locais, ...env];
 }
 function visitasDeOutros(cod) {
   return S.visitasServ.filter(v => v.cod === cod && v.login !== S.usuario.login && v.mes === mesAtual());
@@ -159,7 +168,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 5</p>
+    <p class="dica" style="text-align:center">versão 6</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -169,7 +178,7 @@ async function fazerLogin(form) {
   try {
     const r = await API.chamar({ acao: 'login', login, senha });
     if (!r.ok) { S.msg = r.erro; return render(); }
-    if (S.usuario && S.usuario.login !== r.usuario.login) { await DB.clear(); S.outbox = []; S.visitasServ = []; S.draft = null; S.pacote = null; }
+    if (S.usuario && S.usuario.login !== r.usuario.login) { await DB.clear(); S.outbox = []; S.visitasServ = []; S.enviados = []; S.draft = null; S.pacote = null; }
     S.token = r.token; S.usuario = r.usuario;
     await DB.set('token', r.token); await DB.set('usuario', r.usuario);
     S.msg = 'Baixando sua base de clientes...'; render();
@@ -432,7 +441,8 @@ function pPreco() {
     <p class="dica">TTC = preço ao consumidor · TTV = preço de venda ao PDV. Marque N/A se a marca não está no PDV.</p>
     ${MARCAS_PRECO.map(m => { const x = pr[m] || {}; return `<div class="card preco ${x.na ? 'na' : ''}">
       <div class="lin sp"><b>${m}</b><label class="chk"><input type="checkbox" data-k="precos.${m}.na" data-rr ${x.na ? 'checked' : ''}> N/A</label></div>
-      ${x.na ? '' : `${m === 'M1' ? `<label>Marca Ambev<select data-k="precos.M1.marca"><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${x.marca === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>` : ''}
+      ${x.na ? '' : `${m === 'M1' ? `<label>Marca Ambev<select data-k="precos.M1.marca" data-rr><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${x.marca === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
+      ${x.marca === 'Outra' ? `<label>Qual marca? *<input type="text" data-k="precos.M1.marcaOutra" value="${esc(x.marcaOutra || '')}" placeholder="Digite a marca"></label>` : ''}` : ''}
       <div class="lin">${numero(`precos.${m}.ttc`, 'TTC R$')}${numero(`precos.${m}.ttv`, 'TTV R$')}</div>`}</div>`; }).join('')}
     <details><summary>Desejável (opcional): promoção e posicionamento</summary>
       ${texto('promocao', 'Promoção', 'Ação promocional nossa ou da concorrência')}
@@ -490,7 +500,8 @@ function pObj() {
       <div class="lin">${numero('rgb.skusNossos', 'SKUs RGB nossos', `placeholder="${nossosRgb}"`)}${numero('rgb.skusConc', 'SKUs RGB concorrência')}</div>
       <p class="dica">Pela base, o PDV comprou ${nossosRgb} SKU(s) retornáveis nossos no mês.</p>
       <div class="card"><b>Principal concorrente RGB</b>
-        <label>Marca<select data-k="rgb.marcaConc"><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${r.rgb.marcaConc === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
+        <label>Marca<select data-k="rgb.marcaConc" data-rr><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${r.rgb.marcaConc === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
+        ${r.rgb.marcaConc === 'Outra' ? `<label>Qual marca?<input type="text" data-k="rgb.marcaConcOutra" value="${esc(r.rgb.marcaConcOutra || '')}" placeholder="Digite a marca"></label>` : ''}
         <div class="lin">${numero('rgb.ttcConc', 'TTC conc. R$')}${numero('rgb.ttvConc', 'TTV conc. R$')}</div></div>
       ${tipo === 'Maiores quedas' ? `<label>Motivo da queda *<select data-k="rgb.motivo"><option value="">Selecione</option>${MOTIVOS_QUEDA.map(m => `<option ${r.rgb.motivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
         ${texto('rgb.acao', 'Ação combinada para recuperar o volume', '', true)}` : ''}
@@ -547,6 +558,7 @@ function validar(i) {
     if (!r.precificadas) e.push('Informe se as cervejas estão precificadas');
     MARCAS_PRECO.forEach(m => { const x = r.precos[m] || {}; if (!x.na && (x.ttc === undefined || x.ttc === '' || x.ttv === undefined || x.ttv === '')) e.push(`Preencha TTC e TTV de ${m} ou marque N/A`); });
     if (r.precos.M1 && !r.precos.M1.na && !r.precos.M1.marca) e.push('Escolha a marca Ambev do M1');
+    if (r.precos.M1 && !r.precos.M1.na && r.precos.M1.marca === 'Outra' && !(r.precos.M1.marcaOutra || '').trim()) e.push('Digite qual é a outra marca do M1');
   }
   if (id === 'skus' && !txt(r.resumoSkus)) e.push('Descreva o resumo dos SKUs vitoriosos');
   if (id === 'obj') {
@@ -653,7 +665,7 @@ function mostrarErros(er) {
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.filtro === 'busca') { S.filtros.busca = t.value; S._focoBusca = true; clearTimeout(S._tb); S._tb = setTimeout(render, 250); return; }
-  if (t.dataset.k && (t.tagName === 'TEXTAREA' || t.type === 'number')) { setPath(R(), t.dataset.k, t.value); salvarRascunho(); }
+  if (t.dataset.k && (t.tagName === 'TEXTAREA' || t.type === 'number' || t.type === 'text')) { setPath(R(), t.dataset.k, t.value); salvarRascunho(); }
 });
 
 document.addEventListener('change', async e => {
