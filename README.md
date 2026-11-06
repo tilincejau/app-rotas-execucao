@@ -33,8 +33,9 @@ próprios. Cada usuário recebe apenas os clientes do seu escopo (o SV vê só o
    - `perfil`: PROPRIETARIO, GV, SV ou TRADE.
    - `sup_cod`: só para o SV (100, 200, 300). É o que puxa os clientes dele automaticamente.
    - `ger_cod`: 001 = toda a gerência 2216-001. Deixe vazio para ver tudo.
-   - Depois de digitar as senhas, use **Rotas App › Criptografar senhas digitadas**. A senha some e fica só o hash.
-     Para trocar a senha de alguém, digite a nova na coluna `senha` e rode o menu de novo.
+   - `perfil` ADM = administrador: vê tudo e usa qualquer objetivo (bom para testes).
+   - A senha digitada na coluna `senha` vale no **primeiro login**. Nesse momento ela é criptografada e apagada da planilha.
+     Para trocar a senha de alguém, digite a nova na coluna `senha`.
    - Para bloquear alguém: `ativo` = NAO.
 5. **Implantar › Nova implantação › App da Web**.
    Executar como: *Eu*. Quem pode acessar: *Qualquer pessoa*. Copie a URL que termina em `/exec`.

@@ -159,7 +159,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 4</p>
+    <p class="dica" style="text-align:center">versão 5</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -184,7 +184,7 @@ async function fazerLogin(form) {
 function tResumo() {
   const p = progresso(), cfg = perfilCfg(), vs = minhasVisitas();
   const barra = (f, m) => `<div class="barra"><i style="width:${Math.min(100, m ? f / m * 100 : 0)}%"></i></div>`;
-  const pct = Math.min(100, Math.round(p.total / cfg.minimoTotal * 100));
+  const pct = cfg.minimoTotal ? Math.min(100, Math.round(p.total / cfg.minimoTotal * 100)) : 100;
   return `<section>
     ${S.draft ? `<div class="aviso info">Você tem uma visita em andamento: <b>${esc(S.draft.fantasia)}</b>
       <div class="lin"><button class="btn pri" data-acao="continuarRascunho">Continuar</button><button class="btn" data-acao="descartarRascunho">Descartar</button></div></div>` : ''}

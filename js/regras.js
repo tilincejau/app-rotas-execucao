@@ -46,8 +46,14 @@ const PERFIS = {
     ]
   }
 };
+// ADM: vê tudo e pode usar qualquer objetivo (para testes e acompanhamento).
+PERFIS.ADM = {
+  nome: 'Administrador', minimoTotal: 0, regra: 'Acesso total para testes e acompanhamento.',
+  objetivos: [...PERFIS.GV.objetivos, ...PERFIS.SV.objetivos, ...PERFIS.PROPRIETARIO.objetivos, ...PERFIS.TRADE.objetivos]
+    .filter((o, i, a) => a.findIndex(x => x.id === o.id) === i)
+};
 // Hierarquia: quem pode repetir um PDV já feito por outro perfil (só gera aviso).
-const ORDEM_PERFIL = { SV: 1, GV: 2, TRADE: 3, PROPRIETARIO: 4 };
+const ORDEM_PERFIL = { SV: 1, GV: 2, TRADE: 3, PROPRIETARIO: 4, ADM: 5 };
 
 // Nomes amigáveis dos grupos FDS (aba fds, coluna ProdFDS). Imagem: img/fds/<código>.png
 const NOMES_FDS = {
