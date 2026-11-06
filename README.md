@@ -1,4 +1,4 @@
-# Rotas de Execução – App
+# Rotas de Execução – Lince Distribuidora
 
 App de celular (PWA) para as rotas de mercado do Proprietário, GV, SV e Trade.
 O app abre e funciona **sem internet**: a base de clientes fica guardada no aparelho, e as visitas
@@ -47,7 +47,8 @@ próprios. Cada usuário recebe apenas os clientes do seu escopo (o SV vê só o
 ## 2. App no GitHub
 
 1. Crie um repositório (ex.: `rotas-app`) e envie **todos os arquivos desta pasta**, exceto `apps-script/` se preferir.
-2. Edite `js/config.js` e cole a URL `/exec` do passo 1.5.
+2. O `js/config.js` já está com a URL do seu Apps Script. Se você criar uma implantação nova, troque a URL ali.
+   Para atualizar o Code.gs **sem mudar a URL**, use **Implantar › Gerenciar implantações › ✏ Editar › Versão: Nova versão**.
 3. **Settings › Pages** › Branch `main` / pasta `/ (root)` › Save.
    O app fica em `https://SEU-USUARIO.github.io/rotas-app/`.
 4. No celular, abra o link no Chrome ou no Safari e escolha **Adicionar à tela inicial**. O app vira um ícone.
