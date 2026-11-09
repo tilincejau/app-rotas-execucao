@@ -9,6 +9,7 @@ const $app = document.getElementById('app');
 const mesAtual = () => new Date().toISOString().slice(0, 7);
 const hoje = () => new Date().toLocaleDateString('pt-BR');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const n2 = v => (v == null || v === '' ? '–' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const n1 = v => (v == null || v === '' ? '–' : (Math.round(Number(v) * 10) / 10).toLocaleString('pt-BR'));
 const perfilCfg = () => PERFIS[S.usuario.perfil] || PERFIS.SV;
 const objCfg = id => perfilCfg().objetivos.find(o => o.id === id) || { id, nome: id, bloco: 'fds' };
@@ -168,7 +169,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 7</p>
+    <p class="dica" style="text-align:center">versão 8</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -436,7 +437,7 @@ function tabelaAtivos(titulo, l, extra) {
     <div><b>${esc(a[0])}</b> <small>${esc(a[1])}</small></div>
     <div class="grid4"><span>Emissão<b>${esc(a[2])}</b></span><span>Vencimento<b>${esc(a[3])}</b></span>
     <span>Qtd<b>${n1(a[4])}</b></span><span>Dias p/ vencer<b class="${a[5] < 0 ? 'erro' : ''}">${n1(a[5])}</b></span>
-    <span>Giro mês<b>${n1(a[6])}</b></span><span>Status giro<b class="${/zero|baixo/i.test(a[7]) ? 'erro' : ''}">${esc(a[7])}</b></span></div></div>`).join('')}${extra || ''}</div>`;
+    <span>Giro mês<b>${n2(a[6])}</b></span><span>Status giro<b class="${/zero|baixo/i.test(a[7]) ? 'erro' : ''}">${esc(a[7])}</b></span></div></div>`).join('')}${extra || ''}</div>`;
 }
 function pAtivos() {
   const cod = S.draft.cod, a = R().ativos, P = S.pacote, achou = temAtivos(cod);

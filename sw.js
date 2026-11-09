@@ -1,7 +1,7 @@
 // Service worker: guarda o app no aparelho para abrir sem internet.
 // Com internet: sempre busca a versão mais nova no GitHub (e atualiza a cópia).
 // Sem internet: usa a cópia guardada.
-const VERSAO = 'rotas-v7';
+const VERSAO = 'rotas-v8';
 const ARQUIVOS = ['./', 'index.html', 'css/app.css', 'js/config.js', 'js/regras.js', 'js/db.js', 'js/app.js',
   'manifest.webmanifest', 'img/icone-192.png', 'img/logo.png'];
 
