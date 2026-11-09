@@ -120,19 +120,19 @@ function progresso() {
   const vs = minhasVisitas(), out = {};
   perfilCfg().objetivos.forEach(o => {
     const doObj = vs.filter(v => v.objetivo === o.id);
-    let feito = doObj.length, meta = o.min, detalhe = '';
+    let feito = doObj.length, meta = o.min, detalhe = '', porVend = null;
     if (o.porVendedor) {
       const pv = {}; doObj.forEach(v => pv[v.vendedor] = (pv[v.vendedor] || 0) + 1);
       const vends = vendedoresDoEscopo();
       meta = o.min * Math.max(1, vends.length);
       feito = vends.reduce((s, vd) => s + Math.min(o.min, pv[vd] || 0), 0);
-      detalhe = vends.map(vd => `${vd}: ${pv[vd] || 0}/${o.min}`).join(' · ');
+      porVend = vends.map(vd => [vd, pv[vd] || 0]);
     }
     if (o.contaRotas) {
       const rotas = new Set(doObj.map(v => v.vendedor + '|' + v.data));
       feito = rotas.size; detalhe = doObj.length + ' PDVs em ' + rotas.size + ' rota(s)';
     }
-    out[o.id] = { feito, meta, detalhe, pdvs: doObj.length };
+    out[o.id] = { feito, meta, detalhe, pdvs: doObj.length, porVend, min: o.min };
   });
   out.total = new Set(vs.map(v => v.cod)).size;
   return out;
@@ -170,7 +170,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 14</p>
+    <p class="dica" style="text-align:center">versão 15</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -208,6 +208,7 @@ function tResumo() {
       <div class="lin sp"><b>${esc(o.curto)}</b><span class="tag ${p[o.id].feito >= p[o.id].meta ? 'ok' : ''}">${p[o.id].feito}/${p[o.id].meta}${o.contaRotas ? ' rota' : ''}</span></div>
       ${barra(p[o.id].feito, p[o.id].meta)}
       ${p[o.id].detalhe ? `<small>${esc(p[o.id].detalhe)}</small>` : ''}
+      ${p[o.id].porVend ? gradeVendedores(p[o.id].porVend, p[o.id].min, o.id) : ''}
     </div>`).join('')}
     <button class="btn pri grande" data-acao="novaVisita">+ Nova visita</button>
     <h3>Minhas visitas (${vs.length})</h3>
@@ -229,6 +230,14 @@ function tResumo() {
     </div></div>` : ''}
     <p class="dica">Base atualizada em ${esc(S.pacote?.atualizado || '–')} · ${S.clientes.length} clientes</p>
   </section>`;
+}
+
+// Coaching por vendedor: um quadrinho por vendedor com realizado/mínimo (verde quando completou)
+function gradeVendedores(porVend, min, objId, ativo) {
+  const ok = porVend.filter(x => x[1] >= min).length;
+  return `<small>${ok} de ${porVend.length} vendedores completos · toque para fazer o coaching</small>
+    <div class="vends">${porVend.map(([vd, n]) => `<button class="vend-chip ${n >= min ? 'ok' : n ? 'parcial' : ''} ${ativo === vd ? 'at' : ''}" data-acao="coachingVend" data-v="${esc(vd)}" data-o="${objId}">
+      <b>${esc(vd)}</b><span>${n}/${min}</span><i style="width:${Math.min(100, n / min * 100)}%"></i></button>`).join('')}</div>`;
 }
 
 /* TELA 3 — OBJETIVO DA ROTA */
@@ -274,8 +283,10 @@ function tPdv() {
   const base = S.clientes.filter(c => !f.sup || c.sup === f.sup);
   const baseV = base.filter(c => !f.vend || c.vend === f.vend);
   const baseD = baseV.filter(c => !f.dia || c.dia === f.dia);
+  const contVend = {}; if (o.porVendedor) minhasVisitas().filter(v => v.objetivo === o.id).forEach(v => contVend[v.vendedor] = (contVend[v.vendedor] || 0) + 1);
+  const rotulo = (k, x) => k === 'vend' && o.porVendedor ? `${x} – ${contVend[x] || 0}/${o.min}${(contVend[x] || 0) >= o.min ? ' ✔' : ''}` : x;
   const sel = (k, rot, opts, todos = 'Todos', dis) => `<label>${rot}<select data-filtro="${k}" ${dis ? 'disabled' : ''}>
-      <option value="">${todos}</option>${opts.map(x => `<option ${x === f[k] ? 'selected' : ''} value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label>`;
+      <option value="">${todos}</option>${opts.map(x => `<option ${x === f[k] ? 'selected' : ''} value="${esc(x)}">${esc(rotulo(k, x))}</option>`).join('')}</select></label>`;
   const lista = clientesFiltrados(), mostrar = lista.slice(0, 150);
   return `<section>
     <button class="voltar" data-acao="ir" data-v="objetivos">‹ Objetivos</button>
@@ -286,6 +297,7 @@ function tPdv() {
       ${sel('dia', 'Dia (pasta)', ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].filter(d => baseV.some(c => c.dia === d)).concat(uniq(baseV.map(c => c.dia)).filter(d => d.startsWith('Outros'))))}
       ${sel('cidade', 'Cidade', uniq(baseD.map(c => c.cidade)))}
     </div>
+    ${o.porVendedor ? (() => { const pr = progresso()[o.id]; return `<div class="card">${gradeVendedores(pr.porVend.filter(x => uniq(base.map(c => c.vend)).includes(x[0]) || !f.sup), pr.min, o.id, f.vend)}</div>`; })() : ''}
     ${o.soBar ? `<label class="chk"><input type="checkbox" data-filtro="soBar" ${f.soBar ? 'checked' : ''}> Mostrar só segmento BAR</label>` : ''}
     <input id="busca" class="busca" type="search" placeholder="Buscar código ou nome fantasia" value="${esc(f.busca)}" data-filtro="busca">
     ${o.exigeVendedor && !f.vend ? '<div class="aviso info">Escolha o vendedor acompanhado para listar os PDVs.</div>' : `
@@ -708,6 +720,9 @@ document.addEventListener('click', async e => {
     case 'abrirPdv': return modalPdv(v);
     case 'jaFeito': { const m = minhasVisitas().find(x => x.cod === v); alert(`Você já registrou este PDV em ${m.data} (${objCfg(m.objetivo).curto}). Cada PDV só pode ser feito uma vez por você no mês.`); return; }
     case 'fecharModal': S.modal = null; break;
+    case 'coachingVend':
+      if (S.tela === 'resumo' && S.draft) { S.modalResumo = true; break; }
+      S.objetivo = el.dataset.o; S.filtros.vend = v; S.filtros.dia = ''; S.filtros.cidade = ''; S.filtros.busca = ''; S.tela = 'pdv'; scrollTo(0, 0); break;
     case 'iniciarVisita': {
       const errado = document.querySelector('input[name=cc][value=N]').checked, novo = document.getElementById('canalNovo').value;
       if (errado && !novo) return alert('Selecione o canal correto.');
