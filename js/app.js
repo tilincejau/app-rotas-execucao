@@ -169,7 +169,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 8</p>
+    <p class="dica" style="text-align:center">versão 9</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -374,7 +374,20 @@ function calcFds() {
 }
 function itensVisib() { return VISIBILIDADE[CANAL_PARA_VISIB[S.draft.canal] || 'DEMAIS']; }
 function calcVisib() { const it = itensVisib(); return it.reduce((s, x, i) => s + (R().visib[i] ? x[1] : 0), 0); }
-function calcAtivos() { const a = R().ativos; return a.possui === 'NAO' ? (a.ciaRefrig === 'S' ? 50 : 0) + (a.obrigRefrig === 'S' ? 50 : 0) : null; }
+// Geladeira: posicionamento (20 + 20 + 60) · Sem ativos: refrigeração (50 + 50)
+const POSIC_GELADEIRA = [['gelCia', 'Há cerveja da Cia refrigerada?', 20], ['gelAbast', 'Geladeira está com no mínimo 75% abastecida?', 20], ['gelNaoInvadida', 'Geladeira NÃO está invadida (sem concorrência)?', 60]];
+function temGeladeira() { const a = R().ativos; return a.possui === 'SIM' && (!!(S.pacote.geladeiras[S.draft.cod] || []).length || a.gelForaBase === 'S'); }
+function statusGiroGel() { // pior status entre as geladeiras do PDV
+  const l = S.pacote.geladeiras[S.draft.cod] || [], st = l.map(g => String(g[7] || ''));
+  return st.find(x => /zero/i.test(x)) || st.find(x => /baixo/i.test(x)) || st.find(x => /ok/i.test(x)) || (l.length ? 'Sem dado de giro' : 'Fora da base');
+}
+const giroRuim = () => /zero|baixo/i.test(statusGiroGel());
+function calcAtivos() {
+  const a = R().ativos;
+  if (a.possui === 'NAO') return (a.ciaRefrig === 'S' ? 50 : 0) + (a.obrigRefrig === 'S' ? 50 : 0);
+  if (temGeladeira()) return POSIC_GELADEIRA.reduce((t, [k, , p]) => t + (a[k] === 'S' ? p : 0), 0);
+  return null;
+}
 function calcPreco() { return R().precificadas === 'S' ? 100 : R().precificadas === 'N' ? 0 : null; }
 function skusDoPdv() { return S.pacote.skus[S.draft.cod] || []; }
 function vitoriosos() {
@@ -448,6 +461,14 @@ function pAtivos() {
       ${tabelaAtivos('🍺 Chopeiras', P.chopeiras[cod])}
       ${tabelaAtivos('📦 Vasilhames', P.vasilhames[cod])}
       ${!achou ? '<div class="aviso alerta">O PDV tem ativo mas não está na base de comodatos – descreva na observação.</div>' : ''}
+      ${!(P.geladeiras[cod] || []).length ? `<div class="campo"><b>Tem geladeira da Cia no PDV?</b>${radio('ativos.gelForaBase', [['S', 'Sim'], ['N', 'Não']])}</div>` : ''}
+      ${temGeladeira() ? `<div class="card"><b>Posicionamento de nossos produtos</b>
+        ${POSIC_GELADEIRA.map(([k, t, p]) => `<div class="item"><span>${t} (${p} pts)</span>${radio('ativos.' + k, [['S', 'Sim'], ['N', 'Não']])}</div>`).join('')}
+        <div class="lin sp" style="margin-top:8px"><span>Pontuação</span><span class="pts">${calcAtivos()}/100</span></div></div>
+      <div class="card"><b>O PDV bate seu giro de refrigeração?</b>
+        <div class="lin sp"><span>Status giro (automático)</span><span class="tag ${giroRuim() ? 'alerta' : /ok/i.test(statusGiroGel()) ? 'ok' : ''}">${esc(statusGiroGel())}</span></div>
+        ${giroRuim() ? `<div class="aviso alerta">Giro abaixo do esperado: descreva o plano de ação para reverter.</div>${texto('ativos.planoGiro', 'Plano de ação para reversão do giro', 'Ex.: positivar Heineken 600, ação de preço, remanejar geladeira...', true)}` : ''}
+      </div>` : ''}
       ${fotoBtn('geladeira', 'Foto da geladeira')}
       ${texto('ativos.obs', 'Observação dos ativos', 'Ex.: geladeira com concorrente, vasilhame parado, chopeira sem uso...')}` : ''}
     ${a.possui === 'NAO' ? `
@@ -560,14 +581,14 @@ function resumoVisita() {
   const f = calcFds(), v = vitoriosos(), r = R(), o = objCfg(S.draft.objetivo);
   return { fds: f.real, fdsMeta: f.meta, visib: calcVisib(), ativos: calcAtivos(), preco: calcPreco(), skus: skusDoPdv().length,
     vitoriosos: SEGMENTOS_VITORIOSOS.filter(k => v[k].length).map(k => k + ':' + v[k].length).join(', '),
-    fortes: r.fortes || '', oport: r.oport || '', obs: r.ativos.obs || '',
+    fortes: r.fortes || '', oport: r.oport || '', obs: [r.ativos.obs, r.ativos.planoGiro ? 'Plano giro: ' + r.ativos.planoGiro : ''].filter(Boolean).join(' | '),
     notaCoaching: o.bloco === 'coaching' ? notaCoaching() : '' };
 }
 function pRev() {
   const s = resumoVisita(), erros = PASSOS.slice(0, 6).flatMap((_, i) => validar(i));
   return `<div class="card"><ul class="rev">
       <li>FDS – presença<b>${n1(s.fds)}/${n1(s.fdsMeta)}</b></li><li>Visibilidade<b>${s.visib}/100</b></li>
-      <li>Refrigeração<b>${s.ativos == null ? 'possui ativos' : s.ativos + '/100'}</b></li><li>Precificação<b>${s.preco ?? '–'}</b></li>
+      <li>${R().ativos.possui === 'SIM' ? 'Posicionamento geladeira' : 'Refrigeração'}<b>${s.ativos == null ? 'possui ativos' : s.ativos + '/100'}</b></li><li>Precificação<b>${s.preco ?? '–'}</b></li>
       <li>SKUs presentes<b>${s.skus}</b></li><li>Vitoriosos<b>${esc(s.vitoriosos || '–')}</b></li>
       ${s.notaCoaching !== '' ? `<li>Nota coaching<b>${s.notaCoaching}%</b></li>` : ''}
       <li>Fotos<b>${S.draft.fotos.length}</b></li></ul></div>
@@ -583,6 +604,11 @@ function validar(i) {
   if (id === 'ativos') {
     if (!r.ativos.possui) e.push('Informe se o PDV possui ativos');
     if (r.ativos.possui === 'NAO' && (!r.ativos.ciaRefrig || !r.ativos.obrigRefrig)) e.push('Responda as perguntas de refrigeração');
+    if (r.ativos.possui === 'SIM' && !(S.pacote.geladeiras[S.draft.cod] || []).length && !r.ativos.gelForaBase) e.push('Informe se tem geladeira da Cia no PDV');
+    if (temGeladeira()) {
+      if (POSIC_GELADEIRA.some(([k]) => !r.ativos[k])) e.push('Responda as perguntas de posicionamento da geladeira');
+      if (giroRuim() && (r.ativos.planoGiro || '').trim().length < 10) e.push('Descreva o plano de ação para reverter o giro da geladeira');
+    }
   }
   if (id === 'preco') {
     if (!r.precificadas) e.push('Informe se as cervejas estão precificadas');
