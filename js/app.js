@@ -169,7 +169,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 9</p>
+    <p class="dica" style="text-align:center">versão 10</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -390,9 +390,13 @@ function calcAtivos() {
 }
 function calcPreco() { return R().precificadas === 'S' ? 100 : R().precificadas === 'N' ? 0 : null; }
 function skusDoPdv() { return S.pacote.skus[S.draft.cod] || []; }
+const ehLono = s => SKUS_LONO.includes(String(s[0])) || s[3] === 'Lono';
 function vitoriosos() {
   const o = {}; SEGMENTOS_VITORIOSOS.forEach(s => o[s] = []);
-  skusDoPdv().forEach(s => { if (s[3]) o[s[3]].push(s[1]); });
+  skusDoPdv().forEach(s => {
+    if (s[3] && s[3] !== 'Lono') o[s[3]].push(s[1]);
+    if (ehLono(s)) o.Lono.push(s[1]);
+  });
   return o;
 }
 function notaCoaching() {
@@ -494,14 +498,14 @@ function pPreco() {
 }
 /* ---- PASSO 5: SKUs ---- */
 function pSkus() {
-  const l = skusDoPdv(), v = vitoriosos(), tot = SEGMENTOS_VITORIOSOS.reduce((s, k) => s + v[k].length, 0);
+  const l = skusDoPdv(), v = vitoriosos(), tot = l.filter(s => s[3] || ehLono(s)).length;
   const pres = SEGMENTOS_VITORIOSOS.filter(k => v[k].length), aus = SEGMENTOS_VITORIOSOS.filter(k => !v[k].length);
   const sugestao = (pres.length ? 'Vitoriosos presentes: ' + pres.map(k => `${k} (${v[k].length})`).join(', ') + '.' : 'Nenhum SKU vitorioso comprado no mês.') +
     (aus.length ? ' Ausentes: ' + aus.join(', ') + '.' : ' Todos os segmentos presentes.');
   return `<div class="card destaque lin sp"><div><div class="big">${l.length}</div>SKUs presentes</div><div><div class="big">${tot}</div>vitoriosos</div></div>
     <div class="segs">${SEGMENTOS_VITORIOSOS.map(k => `<div class="${v[k].length ? 'ok' : 'falta'}"><b>${v[k].length}</b>${k}</div>`).join('')}</div>
     <details ${l.length < 12 ? 'open' : ''}><summary>Lista de SKUs comprados no mês (${l.length})</summary>
-      <ul class="lista mini">${l.map(s => `<li>${imgProd([s[0]], s[1], 'mini')}<span style="flex:1">${esc(s[1])} <small>${esc(s[0])}</small></span>${s[3] ? `<span class="tag ok">${s[3]}</span>` : ''}${s[2] ? '<span class="tag">estratégico</span>' : ''}</li>`).join('')}</ul></details>
+      <ul class="lista mini">${l.map(s => `<li>${imgProd([s[0]], s[1], 'mini')}<span style="flex:1">${esc(s[1])} <small>${esc(s[0])}</small></span>${s[3] && s[3] !== 'Lono' ? `<span class="tag ok">${s[3]}</span>` : ''}${ehLono(s) ? '<span class="tag ok">Lono</span>' : ''}${s[2] ? '<span class="tag">estratégico</span>' : ''}</li>`).join('')}</ul></details>
     ${texto('resumoSkus', 'Resumo do PDV com os SKUs vitoriosos presentes', 'Descreva os vitoriosos presentes e o que falta', true)}
     <button class="btn peq" data-acao="sugerir" data-k="resumoSkus" data-v="${esc(sugestao)}">✨ Preencher sugestão</button>`;
 }

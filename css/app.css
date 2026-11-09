@@ -91,3 +91,4 @@ details{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:8p
 .fds .vend{display:flex;gap:6px;align-items:center;margin-top:3px}
 .vol{color:var(--v)!important}.vol b{text-transform:capitalize}
 .grid4 span{text-transform:none}
+.lista.mini li{flex-wrap:wrap}.lista.mini li>span[style]{min-width:60%}

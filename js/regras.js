@@ -93,6 +93,9 @@ const MARCAS_PRECO = ['Heineken', 'Original', 'Amstel', 'M1'];
 const MARCAS_M1 = ['Skol', 'Brahma', 'Antarctica', 'Budweiser', 'Itaipava', 'Petra', 'Outra'];
 
 const SEGMENTOS_VITORIOSOS = ['Craft', 'Mainstream', 'Premium', 'Economy', 'Fys', 'Lono'];
+// LONO: códigos (ProdCod) que contam como Lono, além do segmento original (Premium/Mainstream/Craft)
+const SKUS_LONO = ['903991', '903996', '904895', '904961', '905362', '904931', '904632', '905541', '905603',
+  '419448', '634957', '905451', '905661', '905411', '905422'];
 
 // Coaching: 5 etapas, cada uma com comportamentos observáveis (Sim=2, Parcial=1, Não=0)
 const COACHING = [
