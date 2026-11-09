@@ -8,13 +8,43 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="img/icone-192.png">
   <link rel="apple-touch-icon" href="img/icone-192.png">
-  <link rel="stylesheet" href="css/app.css?v=12">
+  <link rel="stylesheet" href="css/app.css?v=13">
+  <script>
+    // Diagnóstico: se algo falhar ao abrir, mostra o motivo na tela em vez de ficar em "Carregando…"
+    window.__falhas = [];
+    function __mostrarFalha() {
+      var el = document.getElementById('app');
+      if (!el || !window.__falhas.length) return;
+      el.innerHTML = '<div style="max-width:520px;margin:40px auto;padding:16px;font:15px system-ui;background:#fdeaea;color:#8d1010;border-radius:12px">' +
+        '<b>O app não conseguiu abrir.</b><ul style="padding-left:18px">' +
+        window.__falhas.map(function (f) { return '<li>' + String(f).replace(/</g, '&lt;') + '</li>'; }).join('') +
+        '</ul><button onclick="__resetar()" style="padding:10px 14px;border:0;border-radius:8px;background:#154026;color:#fff;font-weight:700">Limpar cache e recarregar</button></div>';
+    }
+    function __faltou(arq) { window.__falhas.push('Arquivo não encontrado no GitHub: ' + arq + ' (confira se está na pasta certa)'); __mostrarFalha(); }
+    window.addEventListener('error', function (e) {
+      if (e.message) { window.__falhas.push(e.message + (e.filename ? ' — ' + e.filename.split('/').slice(-2).join('/') + ':' + e.lineno : '')); __mostrarFalha(); }
+    });
+    async function __resetar() {
+      try {
+        if (navigator.serviceWorker) (await navigator.serviceWorker.getRegistrations()).forEach(function (r) { r.unregister(); });
+        if (window.caches) (await caches.keys()).forEach(function (k) { caches.delete(k); });
+      } catch (e) {}
+      location.reload();
+    }
+    if (location.search.indexOf('reset') >= 0) __resetar();
+    setTimeout(function () {
+      var el = document.getElementById('app');
+      if (el && /Carregando/.test(el.textContent) && !window.__falhas.length) {
+        window.__falhas.push('O app demorou para abrir. Toque no botão abaixo.'); __mostrarFalha();
+      }
+    }, 8000);
+  </script>
 </head>
 <body>
   <main id="app"><p style="padding:2rem;text-align:center">Carregando…</p></main>
-  <script src="js/config.js?v=12"></script>
-  <script src="js/regras.js?v=12"></script>
-  <script src="js/db.js?v=12"></script>
-  <script src="js/app.js?v=12"></script>
+  <script src="js/config.js?v=13" onerror="__faltou('js/config.js')"></script>
+  <script src="js/regras.js?v=13" onerror="__faltou('js/regras.js')"></script>
+  <script src="js/db.js?v=13" onerror="__faltou('js/db.js')"></script>
+  <script src="js/app.js?v=13" onerror="__faltou('js/app.js')"></script>
 </body>
 </html>
