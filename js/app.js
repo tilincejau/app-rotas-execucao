@@ -25,6 +25,7 @@ async function iniciar() {
   const pac = await DB.get('pacote');
   if (pac) carregarPacote(pac);
   S.draft = (await DB.get('rascunho')) || null;
+  if (S.draft && (!S.draft.cod || S.outbox.some(v => v.id === S.draft.id))) { S.draft = null; await DB.del('rascunho'); }
   S.enviados = (await DB.get('enviados')) || [];
   S.tela = S.token && S.pacote ? 'resumo' : 'login';
   render();
@@ -169,7 +170,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 10</p>
+    <p class="dica" style="text-align:center">versão 12</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -220,6 +221,12 @@ function tResumo() {
       <button class="btn" data-acao="sync">Sincronizar</button>
       <button class="btn" data-acao="sair">Sair</button>
     </div>
+    ${S.modalResumo && S.draft ? `<div class="modal"><div class="caixa">
+      <h3>Você tem uma visita em andamento</h3>
+      <p><b>${esc(S.draft.cod)} – ${esc(S.draft.fantasia || '')}</b><small>${esc(objCfg(S.draft.objetivo).curto || '')} · iniciada em ${esc(S.draft.data || '')}</small></p>
+      <button class="btn pri grande" data-acao="continuarRascunho">Continuar esta visita</button>
+      <div class="lin"><button class="btn" data-acao="descartarENova">Descartar e começar outra</button><button class="btn" data-acao="fecharModalResumo">Cancelar</button></div>
+    </div></div>` : ''}
     <p class="dica">Base atualizada em ${esc(S.pacote?.atualizado || '–')} · ${S.clientes.length} clientes</p>
   </section>`;
 }
@@ -344,7 +351,7 @@ function novaVisita(cod, canalNovo) {
   S.passo = 0; S.modal = null; S.tela = 'visita'; salvarRascunho(); render(); scrollTo(0, 0);
 }
 const temAtivos = cod => !!(S.pacote.geladeiras[cod] || S.pacote.vasilhames[cod] || S.pacote.chopeiras[cod]);
-let _tmr; function salvarRascunho() { clearTimeout(_tmr); _tmr = setTimeout(() => DB.set('rascunho', S.draft), 300); }
+let _tmr; function salvarRascunho() { clearTimeout(_tmr); _tmr = setTimeout(() => { if (S.draft) { S.draft.passo = S.passo; DB.set('rascunho', S.draft); } }, 300); }
 const R = () => S.draft.respostas;
 function setPath(obj, path, val) { const ks = path.split('.'); let o = obj; ks.slice(0, -1).forEach(k => o = o[k] = o[k] || {}); o[ks[ks.length - 1]] = val; }
 function getPath(obj, path) { return path.split('.').reduce((o, k) => o == null ? undefined : o[k], obj); }
@@ -353,6 +360,7 @@ function tVisita() {
   const d = S.draft, p = PASSOS[S.passo], o = objCfg(d.objetivo);
   const corpo = { fds: pFds, visib: pVisib, ativos: pAtivos, preco: pPreco, skus: pSkus, obj: pObj, rev: pRev }[p.id]();
   return `<section class="visita">
+    <button class="voltar" data-acao="sairVisita">‹ Resumo (a visita fica salva)</button>
     <div class="pdvtopo"><b>${esc(d.cod)} – ${esc(d.fantasia)}</b><small>${esc(o.curto)} · ${esc(d.canal)}${d.canalCorreto ? '' : ' (corrigido)'} · vend ${esc(d.vend)}</small></div>
     <nav class="passos">${PASSOS.map((x, i) => `<button class="${i === S.passo ? 'at' : i < S.passo ? 'ok' : ''}" data-acao="passo" data-v="${i}">${i + 1}<span>${x.nome}</span></button>`).join('')}</nav>
     <h2>${S.passo + 1}. ${p.id === 'obj' ? tituloObj(o) : p.nome}</h2>
@@ -554,10 +562,12 @@ function pObj() {
           : '<small>Nenhum produto retornável comprado neste mês.</small>'}
       </div>
       <div class="lin">${numero('rgb.skusNossos', 'SKUs RGB nossos')}${numero('rgb.skusConc', 'SKUs RGB concorrência *')}</div>
-      <div class="card"><b>Principal concorrente RGB</b>
-        <label>Marca<select data-k="rgb.marcaConc" data-rr><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${r.rgb.marcaConc === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
-        ${r.rgb.marcaConc === 'Outra' ? `<label>Qual marca?<input type="text" data-k="rgb.marcaConcOutra" value="${esc(r.rgb.marcaConcOutra || '')}" placeholder="Digite a marca"></label>` : ''}
-        <div class="lin">${numero('rgb.ttcConc', 'TTC conc. R$')}${numero('rgb.ttvConc', 'TTV conc. R$')}</div></div>
+      <div class="card preco ${r.rgb.concNA ? 'na' : ''}">
+        <div class="lin sp"><b>Principal concorrente RGB</b><label class="chk"><input type="checkbox" data-k="rgb.concNA" data-rr ${r.rgb.concNA ? 'checked' : ''}> N/A</label></div>
+        ${r.rgb.concNA ? '<small>PDV não trabalha com retornável da concorrência.</small>' : `
+        <label>Marca *<select data-k="rgb.marcaConc" data-rr><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${r.rgb.marcaConc === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
+        ${r.rgb.marcaConc === 'Outra' ? `<label>Qual marca? *<input type="text" data-k="rgb.marcaConcOutra" value="${esc(r.rgb.marcaConcOutra || '')}" placeholder="Digite a marca"></label>` : ''}
+        <div class="lin">${numero('rgb.ttcConc', 'TTC conc. R$')}${numero('rgb.ttvConc', 'TTV conc. R$')}</div>`}</div>
       ${tipo === 'Maiores quedas' ? `<label>Motivo da queda *<select data-k="rgb.motivo"><option value="">Selecione</option>${MOTIVOS_QUEDA.map(m => `<option ${r.rgb.motivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
         ${texto('rgb.acao', 'Ação combinada para recuperar o volume', '', true)}` : ''}
       ${blocoFortesOport(false)}`;
@@ -633,7 +643,9 @@ function validar(i) {
     if (o.bloco === 'rgb') {
       if (o.escolheTipoRgb && !r.rgb.tipo) e.push('Escolha o tipo de foco RGB');
       if (r.rgb.share === undefined || r.rgb.share === '') e.push('Informe o share RGB no PDV');
-      if (r.rgb.skusConc === undefined || r.rgb.skusConc === '') e.push('Informe os SKUs RGB da concorrência');
+      if (!r.rgb.concNA && (r.rgb.skusConc === undefined || r.rgb.skusConc === '')) e.push('Informe os SKUs RGB da concorrência (ou marque N/A no concorrente)');
+      if (!r.rgb.concNA && !r.rgb.marcaConc) e.push('Escolha a marca do principal concorrente RGB ou marque N/A');
+      if (!r.rgb.concNA && r.rgb.marcaConc === 'Outra' && !(r.rgb.marcaConcOutra || '').trim()) e.push('Digite qual é a marca do concorrente');
       if ((o.id === 'RGB_QUEDA' || r.rgb.tipo === 'Maiores quedas') && (!r.rgb.motivo || !txt(r.rgb.acao, 5))) e.push('Informe motivo da queda e ação');
     }
     if (o.bloco === 'rota') {
@@ -660,7 +672,7 @@ async function salvarVisita() {
   d.resumo = resumoVisita();
   if (d.respostas.obsGeral) d.resumo.obs = [d.resumo.obs, d.respostas.obsGeral].filter(Boolean).join(' | ');
   S.outbox.push(d); await DB.set('outbox', S.outbox);
-  S.draft = null; await DB.del('rascunho');
+  clearTimeout(_tmr); S.draft = null; await DB.del('rascunho');
   S.tela = 'resumo'; render(); scrollTo(0, 0);
   sincronizar();
 }
@@ -691,10 +703,12 @@ document.addEventListener('click', async e => {
   switch (a) {
     case 'ir': S.tela = v; S.modal = null; break;
     case 'novaVisita':
-      if (S.draft && !confirm('Há uma visita em andamento. Descartar e começar outra?')) return;
-      S.draft = null; DB.del('rascunho'); S.tela = 'objetivos'; break;
-    case 'continuarRascunho': S.objetivo = S.draft.objetivo; S.tela = 'visita'; S.passo = 0; break;
-    case 'descartarRascunho': if (!confirm('Descartar a visita em andamento?')) return; S.draft = null; DB.del('rascunho'); break;
+      if (S.draft) { S.modalResumo = true; break; }
+      S.tela = 'objetivos'; break;
+    case 'fecharModalResumo': S.modalResumo = false; break;
+    case 'descartarENova': clearTimeout(_tmr); S.draft = null; await DB.del('rascunho'); S.modalResumo = false; S.tela = 'objetivos'; break;
+    case 'continuarRascunho': S.modalResumo = false; S.objetivo = S.draft.objetivo; S.tela = 'visita'; S.passo = S.draft.passo || 0; scrollTo(0, 0); break;
+    case 'descartarRascunho': if (!confirm('Descartar a visita em andamento?')) return; clearTimeout(_tmr); S.draft = null; await DB.del('rascunho'); break;
     case 'escolherObjetivo': S.objetivo = v; S.filtros.vend = ''; S.filtros.busca = ''; S.filtros.ordem = ''; S.filtros.dir = 'desc'; S.tela = 'pdv'; break;
     case 'abrirPdv': return modalPdv(v);
     case 'jaFeito': { const m = minhasVisitas().find(x => x.cod === v); alert(`Você já registrou este PDV em ${m.data} (${objCfg(m.objetivo).curto}). Cada PDV só pode ser feito uma vez por você no mês.`); return; }
@@ -705,9 +719,9 @@ document.addEventListener('click', async e => {
       return novaVisita(v, errado ? novo : null);
     }
     case 'passo': if (Number(v) > S.passo) { for (let i = S.passo; i < Number(v); i++) if (validar(i).length) { S.passo = i; render(); return mostrarErros(validar(i)); } } S.passo = Number(v); break;
-    case 'proximo': { const er = validar(S.passo); if (er.length) return mostrarErros(er); S.passo++; scrollTo(0, 0); break; }
-    case 'anterior': S.passo--; scrollTo(0, 0); break;
-    case 'sairVisita': S.tela = 'resumo'; break; // rascunho fica salvo
+    case 'proximo': { const er = validar(S.passo); if (er.length) return mostrarErros(er); S.passo++; salvarRascunho(); scrollTo(0, 0); break; }
+    case 'anterior': S.passo--; salvarRascunho(); scrollTo(0, 0); break;
+    case 'sairVisita': salvarRascunho(); S.tela = 'resumo'; scrollTo(0, 0); break; // rascunho fica salvo
     case 'salvarVisita': return salvarVisita();
     case 'delFoto': S.draft.fotos.splice(Number(v), 1); salvarRascunho(); break;
     case 'sugerir': { const k = el.dataset.k, at = getPath(R(), k); setPath(R(), k, at ? at + '\n' + v : v); salvarRascunho(); break; }
@@ -743,7 +757,9 @@ document.addEventListener('change', async e => {
   }
   if (t.dataset.k) {
     const val = t.type === 'checkbox' ? t.checked : t.value;
-    setPath(R(), t.dataset.k, val); salvarRascunho();
+    setPath(R(), t.dataset.k, val);
+    if (t.dataset.k === 'rgb.concNA' && val) R().rgb.skusConc = '0'; // sem concorrência retornável = 0 SKUs
+    salvarRascunho();
     if (t.dataset.rr !== undefined || t.type === 'radio' || t.tagName === 'SELECT' && t.dataset.rr !== undefined) render();
   }
 });
