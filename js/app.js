@@ -170,7 +170,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 13</p>
+    <p class="dica" style="text-align:center">versão 14</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -339,7 +339,7 @@ function novaVisita(cod, canalNovo) {
     id: uid(), mes: mesAtual(), data: hoje(), objetivo: o.id, objetivoNome: o.nome,
     cod, fantasia: c.fantasia, sup: c.sup, vend: c.vend, cidade: c.cidade, dia: c.dia,
     canalCadastro: c.canal, canal: canalNovo || c.canal, canalCorreto: !canalNovo,
-    respostas: { visib: {}, ativos: { possui: temAtivos(cod) ? 'SIM' : '' }, precos: {}, fdsVisto: {},
+    respostas: { visib: {}, ativos: { gel: (S.pacote.geladeiras[cod] || []).length ? 'SIM' : 'NAO' }, precos: {}, fdsVisto: {},
       coaching: { vendedor: o.exigeVendedor ? (S.filtros.vend || c.vend) : '', notas: {} }, rgb: {}, rota: {}, trade: { alavancas: [] } },
     fotos: []
   };
@@ -384,7 +384,8 @@ function itensVisib() { return VISIBILIDADE[CANAL_PARA_VISIB[S.draft.canal] || '
 function calcVisib() { const it = itensVisib(); return it.reduce((s, x, i) => s + (R().visib[i] ? x[1] : 0), 0); }
 // Geladeira: posicionamento (20 + 20 + 60) · Sem ativos: refrigeração (50 + 50)
 const POSIC_GELADEIRA = [['gelCia', 'Há cerveja da Cia refrigerada?', 20], ['gelAbast', 'Geladeira está com no mínimo 75% abastecida?', 20], ['gelNaoInvadida', 'Geladeira NÃO está invadida (sem concorrência)?', 60]];
-function temGeladeira() { const a = R().ativos; return a.possui === 'SIM' && (!!(S.pacote.geladeiras[S.draft.cod] || []).length || a.gelForaBase === 'S'); }
+const temGelBase = cod => !!(S.pacote.geladeiras[cod] || []).length;
+function temGeladeira() { const a = R().ativos; return (a.gel || (temGelBase(S.draft.cod) ? 'SIM' : 'NAO')) === 'SIM'; }
 function statusGiroGel() { // pior status entre as geladeiras do PDV
   const l = S.pacote.geladeiras[S.draft.cod] || [], st = l.map(g => String(g[7] || ''));
   return st.find(x => /zero/i.test(x)) || st.find(x => /baixo/i.test(x)) || st.find(x => /ok/i.test(x)) || (l.length ? 'Sem dado de giro' : 'Fora da base');
@@ -392,9 +393,8 @@ function statusGiroGel() { // pior status entre as geladeiras do PDV
 const giroRuim = () => /zero|baixo/i.test(statusGiroGel());
 function calcAtivos() {
   const a = R().ativos;
-  if (a.possui === 'NAO') return (a.ciaRefrig === 'S' ? 50 : 0) + (a.obrigRefrig === 'S' ? 50 : 0);
   if (temGeladeira()) return POSIC_GELADEIRA.reduce((t, [k, , p]) => t + (a[k] === 'S' ? p : 0), 0);
-  return null;
+  return (a.ciaRefrig === 'S' ? 50 : 0) + (a.obrigRefrig === 'S' ? 50 : 0);
 }
 function calcPreco() { return R().precificadas === 'S' ? 100 : R().precificadas === 'N' ? 0 : null; }
 function skusDoPdv() { return S.pacote.skus[S.draft.cod] || []; }
@@ -465,29 +465,27 @@ function tabelaAtivos(titulo, l, extra) {
     <span>Giro mês<b>${n2(a[6])}</b></span><span>Status giro<b class="${/zero|baixo/i.test(a[7]) ? 'erro' : ''}">${esc(a[7])}</b></span></div></div>`).join('')}${extra || ''}</div>`;
 }
 function pAtivos() {
-  const cod = S.draft.cod, a = R().ativos, P = S.pacote, achou = temAtivos(cod);
-  return `<p class="dica">${achou ? 'Encontramos comodatos deste PDV na base (geladeira, vasilhame ou chopeira).' : 'Não há comodato deste PDV na base.'}</p>
-    <div class="campo"><b>O PDV possui ativos da Cia (geladeira, vasilhame, chopeira)?</b>${radio('ativos.possui', [['SIM', 'Sim'], ['NAO', 'Não']])}</div>
-    ${a.possui === 'SIM' ? `
+  const cod = S.draft.cod, a = R().ativos, P = S.pacote, gelBase = temGelBase(cod);
+  if (!a.gel) a.gel = gelBase ? 'SIM' : 'NAO'; // automático pela base (refrigeracao_comodatos, Cmd_Grupo = Freezer)
+  const outros = (P.chopeiras[cod] || []).length + (P.vasilhames[cod] || []).length;
+  return `<div class="campo"><b>O PDV possui geladeira da Cia?</b>${radio('ativos.gel', [['SIM', 'Sim'], ['NAO', 'Não']])}
+      <small>${gelBase ? `Automático: ${P.geladeiras[cod].length} geladeira(s) em comodato na base.` : 'Automático: nenhuma geladeira (Freezer) em comodato na base.'}${(a.gel === 'SIM') !== gelBase ? ' <b class="erro">Resposta diferente da base – explique na observação.</b>' : ''}</small></div>
+    ${a.gel === 'SIM' ? `
       ${tabelaAtivos('🧊 Geladeiras', P.geladeiras[cod])}
-      ${tabelaAtivos('🍺 Chopeiras', P.chopeiras[cod])}
-      ${tabelaAtivos('📦 Vasilhames', P.vasilhames[cod])}
-      ${!achou ? '<div class="aviso alerta">O PDV tem ativo mas não está na base de comodatos – descreva na observação.</div>' : ''}
-      ${!(P.geladeiras[cod] || []).length ? `<div class="campo"><b>Tem geladeira da Cia no PDV?</b>${radio('ativos.gelForaBase', [['S', 'Sim'], ['N', 'Não']])}</div>` : ''}
-      ${temGeladeira() ? `<div class="card"><b>Posicionamento de nossos produtos</b>
+      <div class="card"><b>Posicionamento de nossos produtos</b>
         ${POSIC_GELADEIRA.map(([k, t, p]) => `<div class="item"><span>${t} (${p} pts)</span>${radio('ativos.' + k, [['S', 'Sim'], ['N', 'Não']])}</div>`).join('')}
         <div class="lin sp" style="margin-top:8px"><span>Pontuação</span><span class="pts">${calcAtivos()}/100</span></div></div>
       <div class="card"><b>O PDV bate seu giro de refrigeração?</b>
         <div class="lin sp"><span>Status giro (automático)</span><span class="tag ${giroRuim() ? 'alerta' : /ok/i.test(statusGiroGel()) ? 'ok' : ''}">${esc(statusGiroGel())}</span></div>
         ${giroRuim() ? `<div class="aviso alerta">Giro abaixo do esperado: descreva o plano de ação para reverter.</div>${texto('ativos.planoGiro', 'Plano de ação para reversão do giro', 'Ex.: positivar Heineken 600, ação de preço, remanejar geladeira...', true)}` : ''}
-      </div>` : ''}
-      ${fotoBtn('geladeira', 'Foto da geladeira')}
-      ${texto('ativos.obs', 'Observação dos ativos', 'Ex.: geladeira com concorrente, vasilhame parado, chopeira sem uso...')}` : ''}
-    ${a.possui === 'NAO' ? `
-      <div class="campo"><b>Há cerveja da Cia refrigerada? (50 pts)</b>${radio('ativos.ciaRefrig', [['S', 'Sim'], ['N', 'Não']])}</div>
-      <div class="campo"><b>SKUs obrigatórios presentes estão refrigerados? (50 pts)</b>${radio('ativos.obrigRefrig', [['S', 'Sim'], ['N', 'Não']])}</div>
-      <div class="card destaque"><div class="big">${calcAtivos()}<small>/100</small></div>Refrigeração</div>
-      ${texto('ativos.obs', 'Observação')}` : ''}`;
+      </div>
+      ${fotoBtn('geladeira', 'Foto da geladeira')}` : `
+      <div class="card"><b>Refrigeração (PDV sem geladeira da Cia)</b>
+        <div class="item"><span>Há cerveja da Cia refrigerada? (50 pts)</span>${radio('ativos.ciaRefrig', [['S', 'Sim'], ['N', 'Não']])}</div>
+        <div class="item"><span>SKUs obrigatórios presentes estão refrigerados? (50 pts)</span>${radio('ativos.obrigRefrig', [['S', 'Sim'], ['N', 'Não']])}</div>
+        <div class="lin sp" style="margin-top:8px"><span>Pontuação</span><span class="pts">${calcAtivos()}/100</span></div></div>`}
+    ${outros ? `<h3>Outros equipamentos em comodato</h3>${tabelaAtivos('🍺 Chopeiras / outros', P.chopeiras[cod])}${tabelaAtivos('📦 Vasilhames', P.vasilhames[cod])}` : ''}
+    ${texto('ativos.obs', 'Observação dos ativos', 'Ex.: geladeira com concorrente, vasilhame parado, chopeira sem uso...')}`;
 }
 /* ---- PASSO 4: PREÇO ---- */
 function pPreco() {
@@ -524,7 +522,7 @@ function sugestaoOport() {
   if (calcVisib() < 100) out.push('Completar visibilidade do canal (' + calcVisib() + '/100)');
   const aus = SEGMENTOS_VITORIOSOS.filter(k => !v[k].length); if (aus.length) out.push('Incluir vitoriosos: ' + aus.join(', '));
   if (R().precificadas === 'N') out.push('Precificar todas as nossas cervejas');
-  if (R().ativos.possui === 'NAO') out.push('Avaliar implantação de geladeira');
+  if (!temGeladeira()) out.push('Avaliar implantação de geladeira');
   return out.join('. ') + (out.length ? '.' : '');
 }
 function blocoFortesOport(req) {
@@ -602,7 +600,7 @@ function pRev() {
   const s = resumoVisita(), erros = PASSOS.slice(0, 6).flatMap((_, i) => validar(i));
   return `<div class="card"><ul class="rev">
       <li>FDS – presença<b>${n1(s.fds)}/${n1(s.fdsMeta)}</b></li><li>Visibilidade<b>${s.visib}/100</b></li>
-      <li>${R().ativos.possui === 'SIM' ? 'Posicionamento geladeira' : 'Refrigeração'}<b>${s.ativos == null ? 'possui ativos' : s.ativos + '/100'}</b></li><li>Precificação<b>${s.preco ?? '–'}</b></li>
+      <li>${temGeladeira() ? 'Posicionamento geladeira' : 'Refrigeração'}<b>${s.ativos + '/100'}</b></li><li>Precificação<b>${s.preco ?? '–'}</b></li>
       <li>SKUs presentes<b>${s.skus}</b></li><li>Vitoriosos<b>${esc(s.vitoriosos || '–')}</b></li>
       ${s.notaCoaching !== '' ? `<li>Nota coaching<b>${s.notaCoaching}%</b></li>` : ''}
       <li>Fotos<b>${S.draft.fotos.length}</b></li></ul></div>
@@ -616,13 +614,10 @@ function validar(i) {
   const r = R(), o = objCfg(S.draft.objetivo), e = [], txt = (v, n = 10) => (v || '').trim().length >= n;
   const id = PASSOS[i].id;
   if (id === 'ativos') {
-    if (!r.ativos.possui) e.push('Informe se o PDV possui ativos');
-    if (r.ativos.possui === 'NAO' && (!r.ativos.ciaRefrig || !r.ativos.obrigRefrig)) e.push('Responda as perguntas de refrigeração');
-    if (r.ativos.possui === 'SIM' && !(S.pacote.geladeiras[S.draft.cod] || []).length && !r.ativos.gelForaBase) e.push('Informe se tem geladeira da Cia no PDV');
     if (temGeladeira()) {
       if (POSIC_GELADEIRA.some(([k]) => !r.ativos[k])) e.push('Responda as perguntas de posicionamento da geladeira');
       if (giroRuim() && (r.ativos.planoGiro || '').trim().length < 10) e.push('Descreva o plano de ação para reverter o giro da geladeira');
-    }
+    } else if (!r.ativos.ciaRefrig || !r.ativos.obrigRefrig) e.push('Responda as perguntas de refrigeração');
   }
   if (id === 'preco') {
     if (!r.precificadas) e.push('Informe se as cervejas estão precificadas');
