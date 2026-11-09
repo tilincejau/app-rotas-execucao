@@ -92,3 +92,9 @@ details{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:8p
 .vol{color:var(--v)!important}.vol b{text-transform:capitalize}
 .grid4 span{text-transform:none}
 .lista.mini li{flex-wrap:wrap}.lista.mini li>span[style]{min-width:60%}
+.vends{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px;margin-top:8px}
+.vend-chip{position:relative;overflow:hidden;border:1px solid var(--bd);background:#fff;border-radius:10px;padding:7px 4px 9px;text-align:center;cursor:pointer;font:inherit;color:var(--tx)}
+.vend-chip b{display:block;font-size:.95rem}.vend-chip span{font-size:.75rem;color:var(--sub)}
+.vend-chip i{position:absolute;left:0;bottom:0;height:4px;background:var(--ouro)}
+.vend-chip.parcial{border-color:var(--ouro)}.vend-chip.ok{background:var(--v2);border-color:var(--v)}.vend-chip.ok i{background:var(--v)}.vend-chip.ok span{color:var(--v);font-weight:700}
+.vend-chip.at{outline:2px solid var(--v)}
