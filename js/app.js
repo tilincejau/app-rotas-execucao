@@ -168,7 +168,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 6</p>
+    <p class="dica" style="text-align:center">versão 7</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -236,6 +236,17 @@ function tObjetivos() {
   </section>`;
 }
 
+/* ---- volumes RGB x descartável (caixas) ---- */
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function nomeMes(voltar) { // 0 = mês atual da base, 1 = anterior, 2 = retrasado
+  const [a, m] = String(S.pacote.mes || mesAtual()).split('-').map(Number), d = new Date(a, m - 1 - voltar, 1);
+  return MESES[d.getMonth()];
+}
+const volDe = cod => (S.pacote.vol && S.pacote.vol[cod]) || [0, 0, 0, 0, 0, 0];
+const shareRgb = (r, d) => r + d ? Math.round(r / (r + d) * 1000) / 10 : 0;
+const ORDENS_RGB = [['pot', 'Potencial RGB (volume descartável)'], ['rgb', 'Volume RGB'], ['total', 'Volume total'], ['share', 'Share RGB %'], ['queda', 'Queda RGB']];
+const ordemRgb = o => S.filtros.ordem || (o.ordenarQueda ? 'queda' : 'pot');
+
 /* TELA 4 — ESCOLHA DO PDV */
 function clientesFiltrados() {
   const f = S.filtros, o = objCfg(S.objetivo), b = f.busca.trim().toLowerCase();
@@ -243,9 +254,10 @@ function clientesFiltrados() {
     (!f.sup || c.sup === f.sup) && (!f.vend || c.vend === f.vend) && (!f.dia || c.dia === f.dia) &&
     (!f.cidade || c.cidade === f.cidade) && (!o.soBar || !f.soBar || /^bar/i.test(c.canal)) &&
     (!b || c.cod.includes(b) || c.fantasia.toLowerCase().includes(b) || c.razao.toLowerCase().includes(b)));
-  if (o.ordenarQueda && f.ordenarQueda !== false) {
-    const q = c => { const r = S.pacote.rgb[c.cod]; return r ? r[0] - r[1] : 0; };
-    l = l.slice().sort((a, b2) => q(a) - q(b2));
+  if (o.bloco === 'rgb') {
+    const k = ordemRgb(o), sinal = (f.dir || 'desc') === 'desc' ? -1 : 1;
+    const val = c => { const v = volDe(c.cod); return { pot: v[3], rgb: v[2], share: shareRgb(v[2], v[3]), total: v[2] + v[3], queda: v[4] - v[2] }[k]; };
+    l = l.map(c => [c, val(c)]).sort((a, b2) => sinal * (a[1] - b2[1])).map(x => x[0]);
   }
   return l;
 }
@@ -269,10 +281,15 @@ function tPdv() {
     ${o.soBar ? `<label class="chk"><input type="checkbox" data-filtro="soBar" ${f.soBar ? 'checked' : ''}> Mostrar só segmento BAR</label>` : ''}
     <input id="busca" class="busca" type="search" placeholder="Buscar código ou nome fantasia" value="${esc(f.busca)}" data-filtro="busca">
     ${o.exigeVendedor && !f.vend ? '<div class="aviso info">Escolha o vendedor acompanhado para listar os PDVs.</div>' : `
-    <p class="dica">${lista.length} PDV(s)${lista.length > 150 ? ' – mostrando 150, use os filtros' : ''}${o.ordenarQueda ? ' · ordenados pela maior queda RGB (HL mês anterior vs retrasado)' : ''}</p>
+    ${o.bloco === 'rgb' ? `<div class="filtros">
+      <label>Ordenar por<select data-filtro="ordem">${ORDENS_RGB.map(([k, t]) => `<option value="${k}" ${ordemRgb(o) === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label>Ordem<select data-filtro="dir"><option value="desc" ${(f.dir || 'desc') === 'desc' ? 'selected' : ''}>Maior → menor</option><option value="asc" ${f.dir === 'asc' ? 'selected' : ''}>Menor → maior</option></select></label>
+    </div>` : ''}
+    <p class="dica">${lista.length} PDV(s)${lista.length > 150 ? ' – mostrando 150, use os filtros' : ''}${o.bloco === 'rgb' ? ` · volumes em caixas de ${nomeMes(1)} (mês anterior). Potencial = volume descartável que pode virar RGB.` : ''}</p>
     <ul class="lista pdvs">${mostrar.map(c => {
-      const meu = jaFizEste(c.cod), outros = visitasDeOutros(c.cod), r = S.pacote.rgb[c.cod];
-      const queda = o.ordenarQueda && r ? `<small class="${r[0] - r[1] < 0 ? 'erro' : ''}">RGB ${n1(r[1])} → ${n1(r[0])} HL</small>` : '';
+      const meu = jaFizEste(c.cod), outros = visitasDeOutros(c.cod), v = volDe(c.cod);
+      const queda = o.bloco !== 'rgb' ? '' : `<small class="vol"><b>${nomeMes(1)}:</b> RGB ${n1(v[2])} cx · Desc ${n1(v[3])} cx · <b>${n1(shareRgb(v[2], v[3]))}% RGB</b></small>` +
+        (ordemRgb(o) === 'queda' ? `<small class="${v[2] < v[4] ? 'erro' : ''}">RGB ${nomeMes(2)} ${n1(v[4])} → ${nomeMes(1)} ${n1(v[2])} cx</small>` : '');
       return `<li class="${meu ? 'feito' : ''}" data-acao="${meu ? 'jaFeito' : 'abrirPdv'}" data-v="${c.cod}">
         <span class="ck">${meu ? '✔' : ''}</span>
         <div><b>${esc(c.cod)} – ${esc(c.fantasia)}</b><small>${esc(c.canal)} · ${esc(c.cidade)} · vend ${esc(c.vend)} · ${esc(c.dia)}</small>${queda}</div>
@@ -318,6 +335,10 @@ function novaVisita(cod, canalNovo) {
       coaching: { vendedor: o.exigeVendedor ? (S.filtros.vend || c.vend) : '', notas: {} }, rgb: {}, rota: {}, trade: { alavancas: [] } },
     fotos: []
   };
+  if (o.bloco === 'rgb') { // share e SKUs RGB do mês atual já vêm preenchidos
+    const v = volDe(cod), r = S.draft.respostas.rgb;
+    r.share = String(shareRgb(v[0], v[1])); r.skusNossos = String(((S.pacote.rgbSkus || {})[cod] || []).length);
+  }
   if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => { if (S.draft) { S.draft.lat = p.coords.latitude; S.draft.lng = p.coords.longitude; salvarRascunho(); } }, () => {}, { timeout: 8000 });
   S.passo = 0; S.modal = null; S.tela = 'visita'; salvarRascunho(); render(); scrollTo(0, 0);
 }
@@ -492,13 +513,21 @@ function pObj() {
       <div class="campo"><b>Deu o feedback ao vendedor na hora?</b>${radio('coaching.feedback', [['S', 'Sim'], ['N', 'Não']])}</div>`;
   }
   if (o.bloco === 'rgb') {
-    const nossosRgb = skusDoPdv().filter(s => /\bRt\b|retorn/i.test(s[1])).length;
-    const tipo = o.id === 'RGB_QUEDA' ? 'Maiores quedas' : r.rgb.tipo, q = S.pacote.rgb[S.draft.cod];
+    const tipo = o.id === 'RGB_QUEDA' ? 'Maiores quedas' : r.rgb.tipo, v = volDe(S.draft.cod), skusRgb = (S.pacote.rgbSkus || {})[S.draft.cod] || [];
     return `${o.escolheTipoRgb ? `<label>Tipo de foco RGB *<select data-k="rgb.tipo" data-rr><option value="">Selecione</option>${TIPOS_RGB.map(t => `<option ${r.rgb.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
-      ${q ? `<div class="aviso info">Volume RGB: ${n1(q[1])} HL (mês retrasado) → ${n1(q[0])} HL (mês anterior) · variação ${n1(q[0] - q[1])} HL</div>` : ''}
-      <div class="lin">${numero('rgb.share', 'Share RGB no PDV %', 'min="0" max="100"')}</div>
-      <div class="lin">${numero('rgb.skusNossos', 'SKUs RGB nossos', `placeholder="${nossosRgb}"`)}${numero('rgb.skusConc', 'SKUs RGB concorrência')}</div>
-      <p class="dica">Pela base, o PDV comprou ${nossosRgb} SKU(s) retornáveis nossos no mês.</p>
+      <div class="card destaque"><b>Volume em caixas – RGB x descartável</b>
+        <div class="grid4">
+          <span>${nomeMes(1)} RGB<b>${n1(v[2])}</b></span><span>${nomeMes(1)} desc.<b>${n1(v[3])}</b></span><span>${nomeMes(1)} share<b>${n1(shareRgb(v[2], v[3]))}%</b></span>
+          <span>${nomeMes(0)} RGB<b>${n1(v[0])}</b></span><span>${nomeMes(0)} desc.<b>${n1(v[1])}</b></span><span>${nomeMes(0)} share<b>${n1(shareRgb(v[0], v[1]))}%</b></span>
+        </div>
+        ${tipo === 'Maiores quedas' ? `<small class="${v[2] < v[4] ? 'erro' : ''}">RGB ${nomeMes(2)} ${n1(v[4])} → ${nomeMes(1)} ${n1(v[2])} cx (variação ${n1(v[2] - v[4])})</small>` : ''}
+      </div>
+      <div class="lin">${numero('rgb.share', `Share RGB no PDV % (${nomeMes(0)}, automático)`, 'min="0" max="100"')}</div>
+      <div class="card"><b>SKUs RGB comprados em ${nomeMes(0)} (${skusRgb.length})</b>
+        ${skusRgb.length ? `<ul class="lista mini">${skusRgb.map(x => `<li>${imgProd([x[0]], x[1], 'mini')}<span style="flex:1">${esc(x[1])} <small>${esc(x[0])}</small></span><span class="tag ok">${n1(x[2])} cx</span></li>`).join('')}</ul>`
+          : '<small>Nenhum produto retornável comprado neste mês.</small>'}
+      </div>
+      <div class="lin">${numero('rgb.skusNossos', 'SKUs RGB nossos')}${numero('rgb.skusConc', 'SKUs RGB concorrência *')}</div>
       <div class="card"><b>Principal concorrente RGB</b>
         <label>Marca<select data-k="rgb.marcaConc" data-rr><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${r.rgb.marcaConc === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
         ${r.rgb.marcaConc === 'Outra' ? `<label>Qual marca?<input type="text" data-k="rgb.marcaConcOutra" value="${esc(r.rgb.marcaConcOutra || '')}" placeholder="Digite a marca"></label>` : ''}
@@ -635,7 +664,7 @@ document.addEventListener('click', async e => {
       S.draft = null; DB.del('rascunho'); S.tela = 'objetivos'; break;
     case 'continuarRascunho': S.objetivo = S.draft.objetivo; S.tela = 'visita'; S.passo = 0; break;
     case 'descartarRascunho': if (!confirm('Descartar a visita em andamento?')) return; S.draft = null; DB.del('rascunho'); break;
-    case 'escolherObjetivo': S.objetivo = v; S.filtros.vend = ''; S.filtros.busca = ''; S.tela = 'pdv'; break;
+    case 'escolherObjetivo': S.objetivo = v; S.filtros.vend = ''; S.filtros.busca = ''; S.filtros.ordem = ''; S.filtros.dir = 'desc'; S.tela = 'pdv'; break;
     case 'abrirPdv': return modalPdv(v);
     case 'jaFeito': { const m = minhasVisitas().find(x => x.cod === v); alert(`Você já registrou este PDV em ${m.data} (${objCfg(m.objetivo).curto}). Cada PDV só pode ser feito uma vez por você no mês.`); return; }
     case 'fecharModal': S.modal = null; break;
