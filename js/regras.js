@@ -34,7 +34,7 @@ const PERFIS = {
       { id: 'RGB', nome: 'Foco em RGB', curto: 'RGB', min: 20, bloco: 'rgb', escolheTipoRgb: true, ordenarQueda: true,
         desc: '20 PDVs: maiores clientes, maiores quedas ou maiores COMPASS não compradores.' },
       { id: 'ROTA_COMPLETA', nome: 'Rota completa com o vendedor', curto: 'Rota completa', min: 1, bloco: 'rota', exigeVendedor: true, contaRotas: true,
-        desc: 'Rota inteira do vendedor com pior resultado no ranking do mês anterior.' }
+        desc: 'Análise geral da rota (FDS, ativos e SKUs) do vendedor com pior resultado no mês anterior.' }
     ]
   },
   TRADE: {
