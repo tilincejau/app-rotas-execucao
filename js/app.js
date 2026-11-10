@@ -132,7 +132,7 @@ function progresso() {
     }
     if (o.contaRotas) {
       const fech = vs.filter(v => v.objetivo === 'ROTA_FECHAMENTO');
-      feito = fech.length; detalhe = doObj.length + ' PDVs visitados em rota · ' + fech.length + ' rota(s) fechada(s)' + (S.rota ? ' · 1 em andamento' : '');
+      feito = fech.length; detalhe = fech.length + ' rota(s) fechada(s)' + (S.rota ? ' · 1 em andamento' : '');
     }
     out[o.id] = { feito, meta, detalhe, pdvs: doObj.length, porVend, min: o.min };
   });
@@ -172,7 +172,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 17</p>
+    <p class="dica" style="text-align:center">versão 18</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -199,7 +199,7 @@ function tResumo() {
   const barra = (f, m) => `<div class="barra"><i style="width:${Math.min(100, m ? f / m * 100 : 0)}%"></i></div>`;
   const pct = cfg.minimoTotal ? Math.min(100, Math.round(p.total / cfg.minimoTotal * 100)) : 100;
   return `<section>
-    ${S.rota ? `<div class="aviso info">Rota completa em andamento: <b>vendedor ${esc(S.rota.vend)} – ${esc(S.rota.dia)}</b> (${visitasDaRota().length}/${clientesDaRota().length} PDVs)
+    ${S.rota ? `<div class="aviso info">Rota completa em andamento: <b>vendedor ${esc(S.rota.vend)} – ${esc(S.rota.dia)}</b> (${clientesDaRota().length} PDVs · etapa ${(S.rota.passo || 0) + 1} de 4: ${PASSOS_ROTA[S.rota.passo || 0]})
       <div class="lin"><button class="btn pri" data-acao="rotaContinuar">Abrir a rota</button></div></div>` : ''}
     ${S.draft ? `<div class="aviso info">Você tem uma visita em andamento: <b>${esc(S.draft.fantasia)}</b>
       <div class="lin"><button class="btn pri" data-acao="continuarRascunho">Continuar</button><button class="btn" data-acao="descartarRascunho">Descartar</button></div></div>` : ''}
