@@ -102,3 +102,4 @@ details{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:8p
 .rank li.pior{border-color:var(--ouro);background:var(--ouro2)}.rank li.aberto{outline:2px solid var(--v)}
 .dias{display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:6px;margin-top:8px}.dias .btn{flex-direction:column;padding:8px}.dias small{font-weight:400}
 .sub{display:block;margin:8px 0 2px;font-size:.85rem}.sobe{color:var(--v);font-weight:700}
+.grid4.rk{grid-template-columns:repeat(4,1fr)}@media(max-width:420px){.grid4.rk{grid-template-columns:repeat(2,1fr)}}
