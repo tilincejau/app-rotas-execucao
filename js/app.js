@@ -27,6 +27,8 @@ async function iniciar() {
   S.draft = (await DB.get('rascunho')) || null;
   if (S.draft && (!S.draft.cod || S.outbox.some(v => v.id === S.draft.id))) { S.draft = null; await DB.del('rascunho'); }
   S.enviados = (await DB.get('enviados')) || [];
+  S.rota = (await DB.get('rota')) || null;
+  if (S.rota && S.rota.mes !== mesAtual()) { S.rota = null; await DB.del('rota'); }
   S.tela = S.token && S.pacote ? 'resumo' : 'login';
   render();
   if (S.tela === 'resumo') sincronizar();
@@ -129,12 +131,12 @@ function progresso() {
       porVend = vends.map(vd => [vd, pv[vd] || 0]);
     }
     if (o.contaRotas) {
-      const rotas = new Set(doObj.map(v => v.vendedor + '|' + v.data));
-      feito = rotas.size; detalhe = doObj.length + ' PDVs em ' + rotas.size + ' rota(s)';
+      const fech = vs.filter(v => v.objetivo === 'ROTA_FECHAMENTO');
+      feito = fech.length; detalhe = doObj.length + ' PDVs visitados em rota · ' + fech.length + ' rota(s) fechada(s)' + (S.rota ? ' · 1 em andamento' : '');
     }
     out[o.id] = { feito, meta, detalhe, pdvs: doObj.length, porVend, min: o.min };
   });
-  out.total = new Set(vs.map(v => v.cod)).size;
+  out.total = new Set(vs.filter(v => !String(v.cod).startsWith('ROTA-')).map(v => v.cod)).size;
   return out;
 }
 function vendedoresDoEscopo(sup) {
@@ -145,7 +147,7 @@ const uniq = arr => [...new Set(arr)].filter(Boolean).sort((a, b) => String(a).l
 
 /* ------------------------------- RENDER ------------------------------- */
 function render() {
-  const telas = { login: tLogin, resumo: tResumo, objetivos: tObjetivos, pdv: tPdv, visita: tVisita };
+  const telas = { login: tLogin, resumo: tResumo, objetivos: tObjetivos, pdv: tPdv, visita: tVisita, rotaSel: tRotaSel, rota: tRota, rotaFech: tRotaFech };
   $app.innerHTML = (S.tela !== 'login' ? cabecalho() : '') + (telas[S.tela] || tLogin)();
   if (S.tela === 'pdv') { const b = document.getElementById('busca'); if (b && S._focoBusca) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); } }
 }
@@ -170,7 +172,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 15</p>
+    <p class="dica" style="text-align:center">versão 16</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -197,6 +199,8 @@ function tResumo() {
   const barra = (f, m) => `<div class="barra"><i style="width:${Math.min(100, m ? f / m * 100 : 0)}%"></i></div>`;
   const pct = cfg.minimoTotal ? Math.min(100, Math.round(p.total / cfg.minimoTotal * 100)) : 100;
   return `<section>
+    ${S.rota ? `<div class="aviso info">Rota completa em andamento: <b>vendedor ${esc(S.rota.vend)} – ${esc(S.rota.dia)}</b> (${visitasDaRota().length}/${clientesDaRota().length} PDVs)
+      <div class="lin"><button class="btn pri" data-acao="rotaContinuar">Abrir a rota</button></div></div>` : ''}
     ${S.draft ? `<div class="aviso info">Você tem uma visita em andamento: <b>${esc(S.draft.fantasia)}</b>
       <div class="lin"><button class="btn pri" data-acao="continuarRascunho">Continuar</button><button class="btn" data-acao="descartarRascunho">Descartar</button></div></div>` : ''}
     <div class="card destaque">
@@ -214,6 +218,8 @@ function tResumo() {
     <h3>Minhas visitas (${vs.length})</h3>
     ${vs.length ? `<ul class="lista">${vs.slice(0, 80).map(v => {
       const c = S.porCod[v.cod] || {};
+      if (String(v.cod).startsWith('ROTA-')) return `<li><div><b>🚚 Rota completa – vendedor ${esc(v.vendedor)}</b><small>${esc(v.data)} · ${esc(String(v.cod).split('-').pop())} · fechamento</small></div>
+        <span class="tag ${v.pendente ? 'pend' : 'ok'}">${v.pendente ? 'pendente' : 'enviado'}</span></li>`;
       return `<li><div><b>${esc(v.cod)} – ${esc(c.fantasia || '')}</b><small>${esc(v.data)} · ${esc(objCfg(v.objetivo).curto || v.objetivoNome)}${v.vendedor ? ' · vend ' + esc(v.vendedor) : ''}</small>
         ${v.erro ? `<small class="erro">Erro: ${esc(v.erro)}</small>` : ''}</div>
         <span class="tag ${v.pendente ? 'pend' : 'ok'}">${v.pendente ? 'pendente' : 'enviado'}</span></li>`;
@@ -262,6 +268,15 @@ function nomeMes(voltar) { // 0 = mês atual da base, 1 = anterior, 2 = retrasad
 const volDe = cod => (S.pacote.vol && S.pacote.vol[cod]) || [0, 0, 0, 0, 0, 0];
 const shareRgb = (r, d) => r + d ? Math.round(r / (r + d) * 1000) / 10 : 0;
 const ORDENS_RGB = [['pot', 'Potencial RGB (volume descartável)'], ['rgb', 'Volume RGB'], ['total', 'Volume total'], ['share', 'Share RGB %'], ['queda', 'Queda RGB']];
+// Por que o PDV entra no foco RGB (automático):
+//  não comprador = comprou RGB nos meses anteriores e não comprou neste · queda = mês anterior < retrasado · senão maiores clientes
+function tipoRgbAuto(cod) {
+  const v = volDe(cod);
+  if (!v[0] && (v[2] > 0 || v[4] > 0)) return TIPOS_RGB[2];
+  if (v[2] < v[4]) return TIPOS_RGB[1];
+  return TIPOS_RGB[0];
+}
+const tendRgb = v => v[2] > v[4] ? '<span class="sobe">▲ subindo</span>' : v[2] < v[4] ? '<span class="erro">▼ caindo</span>' : '= estável';
 const ordemRgb = o => S.filtros.ordem || (o.ordenarQueda ? 'queda' : 'pot');
 
 /* TELA 4 — ESCOLHA DO PDV */
@@ -309,7 +324,8 @@ function tPdv() {
     <ul class="lista pdvs">${mostrar.map(c => {
       const meu = jaFizEste(c.cod), outros = visitasDeOutros(c.cod), v = volDe(c.cod);
       const queda = o.bloco !== 'rgb' ? '' : `<small class="vol"><b>${nomeMes(1)}:</b> RGB ${n1(v[2])} cx · Desc ${n1(v[3])} cx · <b>${n1(shareRgb(v[2], v[3]))}% RGB</b></small>` +
-        (ordemRgb(o) === 'queda' ? `<small class="${v[2] < v[4] ? 'erro' : ''}">RGB ${nomeMes(2)} ${n1(v[4])} → ${nomeMes(1)} ${n1(v[2])} cx</small>` : '');
+        (ordemRgb(o) === 'queda' ? `<small class="${v[2] < v[4] ? 'erro' : ''}">RGB ${nomeMes(2)} ${n1(v[4])} → ${nomeMes(1)} ${n1(v[2])} cx</small>` : '') +
+        (o.escolheTipoRgb ? `<small><span class="tag">${tipoRgbAuto(c.cod)}</span> ${tendRgb(v)}</small>` : '');
       return `<li class="${meu ? 'feito' : ''}" data-acao="${meu ? 'jaFeito' : 'abrirPdv'}" data-v="${c.cod}">
         <span class="ck">${meu ? '✔' : ''}</span>
         <div><b>${esc(c.cod)} – ${esc(c.fantasia)}</b><small>${esc(c.canal)} · ${esc(c.cidade)} · vend ${esc(c.vend)} · ${esc(c.dia)}</small>${queda}</div>
@@ -352,12 +368,13 @@ function novaVisita(cod, canalNovo) {
     cod, fantasia: c.fantasia, sup: c.sup, vend: c.vend, cidade: c.cidade, dia: c.dia,
     canalCadastro: c.canal, canal: canalNovo || c.canal, canalCorreto: !canalNovo,
     respostas: { visib: {}, ativos: { gel: (S.pacote.geladeiras[cod] || []).length ? 'SIM' : 'NAO' }, precos: {}, fdsVisto: {},
-      coaching: { vendedor: o.exigeVendedor ? (S.filtros.vend || c.vend) : '', notas: {} }, rgb: {}, rota: {}, trade: { alavancas: [] } },
+      coaching: { vendedor: o.id === 'ROTA_COMPLETA' && S.rota ? S.rota.vend : o.exigeVendedor ? (S.filtros.vend || c.vend) : '', notas: {} }, rgb: {}, rota: {}, trade: { alavancas: [] } },
     fotos: []
   };
   if (o.bloco === 'rgb') { // share e SKUs RGB do mês atual já vêm preenchidos
     const v = volDe(cod), r = S.draft.respostas.rgb;
     r.share = String(shareRgb(v[0], v[1])); r.skusNossos = String(((S.pacote.rgbSkus || {})[cod] || []).length);
+    if (o.escolheTipoRgb) r.tipo = tipoRgbAuto(cod);
   }
   if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => { if (S.draft) { S.draft.lat = p.coords.latitude; S.draft.lng = p.coords.longitude; salvarRascunho(); } }, () => {}, { timeout: 8000 });
   S.passo = 0; S.modal = null; S.tela = 'visita'; salvarRascunho(); render(); scrollTo(0, 0);
@@ -558,13 +575,13 @@ function pObj() {
   }
   if (o.bloco === 'rgb') {
     const tipo = o.id === 'RGB_QUEDA' ? 'Maiores quedas' : r.rgb.tipo, v = volDe(S.draft.cod), skusRgb = (S.pacote.rgbSkus || {})[S.draft.cod] || [];
-    return `${o.escolheTipoRgb ? `<label>Tipo de foco RGB *<select data-k="rgb.tipo" data-rr><option value="">Selecione</option>${TIPOS_RGB.map(t => `<option ${r.rgb.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
+    return `${o.escolheTipoRgb ? `<label>Por que este PDV foi escolhido? (automático pela base) *<select data-k="rgb.tipo" data-rr><option value="">Selecione</option>${TIPOS_RGB.map(t => `<option ${r.rgb.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
       <div class="card destaque"><b>Volume em caixas – RGB x descartável</b>
         <div class="grid4">
           <span>${nomeMes(1)} RGB<b>${n1(v[2])}</b></span><span>${nomeMes(1)} desc.<b>${n1(v[3])}</b></span><span>${nomeMes(1)} share<b>${n1(shareRgb(v[2], v[3]))}%</b></span>
           <span>${nomeMes(0)} RGB<b>${n1(v[0])}</b></span><span>${nomeMes(0)} desc.<b>${n1(v[1])}</b></span><span>${nomeMes(0)} share<b>${n1(shareRgb(v[0], v[1]))}%</b></span>
         </div>
-        ${tipo === 'Maiores quedas' ? `<small class="${v[2] < v[4] ? 'erro' : ''}">RGB ${nomeMes(2)} ${n1(v[4])} → ${nomeMes(1)} ${n1(v[2])} cx (variação ${n1(v[2] - v[4])})</small>` : ''}
+        <small>RGB ${nomeMes(2)} ${n1(v[4])} → ${nomeMes(1)} ${n1(v[2])} → ${nomeMes(0)} ${n1(v[0])} cx · ${tendRgb(v)}</small>
       </div>
       <div class="lin">${numero('rgb.share', `Share RGB no PDV % (${nomeMes(0)}, automático)`, 'min="0" max="100"')}</div>
       <div class="card"><b>SKUs RGB comprados em ${nomeMes(0)} (${skusRgb.length})</b>
@@ -583,12 +600,9 @@ function pObj() {
       ${blocoFortesOport(false)}`;
   }
   if (o.bloco === 'rota') {
-    return `<label>Vendedor *<select data-k="coaching.vendedor">${vendedoresDoEscopo(S.draft.sup).map(v => `<option ${r.coaching.vendedor === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-      <div class="lin">${numero('rota.ranking', 'Posição no ranking do mês anterior *', 'step="1" min="1"')}</div>
+    return `<div class="aviso info">PDV da rota do vendedor <b>${esc(r.coaching.vendedor || S.draft.vend)}</b>. A avaliação completa (checklist, planos, oportunidades e nota) é feita no <b>fechamento da rota</b>.</div>
       <div class="campo"><b>Visita seguiu o planejamento diário do vendedor?</b>${radio('rota.seguiuPlano', [['S', 'Sim'], ['N', 'Não']])}</div>
-      ${texto('rota.plano', 'Plano de visita do dia / objetivo neste PDV', '', true)}
-      ${blocoFortesOport(true)}
-      ${fotoBtn('ranking', 'Foto do ranking / plano')}`;
+      ${blocoFortesOport(false)}`;
   }
   if (o.bloco === 'trade') {
     const al = r.trade.alavancas;
@@ -655,12 +669,7 @@ function validar(i) {
       if (!r.rgb.concNA && r.rgb.marcaConc === 'Outra' && !(r.rgb.marcaConcOutra || '').trim()) e.push('Digite qual é a marca do concorrente');
       if ((o.id === 'RGB_QUEDA' || r.rgb.tipo === 'Maiores quedas') && (!r.rgb.motivo || !txt(r.rgb.acao, 5))) e.push('Informe motivo da queda e ação');
     }
-    if (o.bloco === 'rota') {
-      if (!r.coaching.vendedor) e.push('Escolha o vendedor');
-      if (!r.rota.ranking) e.push('Informe a posição do vendedor no ranking');
-      if (!txt(r.rota.plano, 5)) e.push('Descreva o plano de visita');
-      fo();
-    }
+    if (o.bloco === 'rota' && !r.rota.seguiuPlano) e.push('Informe se a visita seguiu o planejamento do vendedor');
     if (o.bloco === 'trade') {
       if (!r.trade.alavancas.length) e.push('Marque ao menos uma alavanca');
       if (r.trade.alavancas.includes(ALAVANCAS_TRADE[6]) && !r.trade.cadastro) e.push('Informe se o cadastro confere com o BWC');
@@ -680,7 +689,7 @@ async function salvarVisita() {
   if (d.respostas.obsGeral) d.resumo.obs = [d.resumo.obs, d.respostas.obsGeral].filter(Boolean).join(' | ');
   S.outbox.push(d); await DB.set('outbox', S.outbox);
   clearTimeout(_tmr); S.draft = null; await DB.del('rascunho');
-  S.tela = 'resumo'; render(); scrollTo(0, 0);
+  S.tela = d.objetivo === 'ROTA_COMPLETA' && S.rota ? 'rota' : 'resumo'; render(); scrollTo(0, 0);
   sincronizar();
 }
 
@@ -704,6 +713,7 @@ document.addEventListener('submit', e => { if (e.target.id === 'fLogin') { e.pre
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-acao]'); if (!el) return;
   const a = el.dataset.acao, v = el.dataset.v;
+  if (a.startsWith('rota')) { e.preventDefault(); return acaoRota(a, v, el); }
   if (a === 'canalOk' || a === 'canalErrado') { document.getElementById('canalNovo').classList.toggle('oculto', a === 'canalOk'); return; }
   if (a === 'alavanca') { const al = R().trade.alavancas, x = ALAVANCAS_TRADE[v]; el.checked ? al.push(x) : al.splice(al.indexOf(x), 1); salvarRascunho(); return render(); }
   e.preventDefault();
@@ -716,7 +726,8 @@ document.addEventListener('click', async e => {
     case 'descartarENova': clearTimeout(_tmr); S.draft = null; await DB.del('rascunho'); S.modalResumo = false; S.tela = 'objetivos'; break;
     case 'continuarRascunho': S.modalResumo = false; S.objetivo = S.draft.objetivo; S.tela = 'visita'; S.passo = S.draft.passo || 0; scrollTo(0, 0); break;
     case 'descartarRascunho': if (!confirm('Descartar a visita em andamento?')) return; clearTimeout(_tmr); S.draft = null; await DB.del('rascunho'); break;
-    case 'escolherObjetivo': S.objetivo = v; S.filtros.vend = ''; S.filtros.busca = ''; S.filtros.ordem = ''; S.filtros.dir = 'desc'; S.tela = 'pdv'; break;
+    case 'escolherObjetivo': S.objetivo = v; S.filtros.vend = ''; S.filtros.busca = ''; S.filtros.ordem = ''; S.filtros.dir = 'desc';
+      S.tela = v === 'ROTA_COMPLETA' ? (S.rota ? 'rota' : 'rotaSel') : 'pdv'; S.rotaVendSel = null; scrollTo(0, 0); break;
     case 'abrirPdv': return modalPdv(v);
     case 'jaFeito': { const m = minhasVisitas().find(x => x.cod === v); alert(`Você já registrou este PDV em ${m.data} (${objCfg(m.objetivo).curto}). Cada PDV só pode ser feito uma vez por você no mês.`); return; }
     case 'fecharModal': S.modal = null; break;
