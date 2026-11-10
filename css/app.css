@@ -98,3 +98,7 @@ details{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:8p
 .vend-chip i{position:absolute;left:0;bottom:0;height:4px;background:var(--ouro)}
 .vend-chip.parcial{border-color:var(--ouro)}.vend-chip.ok{background:var(--v2);border-color:var(--v)}.vend-chip.ok i{background:var(--v)}.vend-chip.ok span{color:var(--v);font-weight:700}
 .vend-chip.at{outline:2px solid var(--v)}
+.rank li{cursor:pointer;align-items:flex-start}.rank .pos{font-weight:800;color:var(--v);min-width:30px;font-size:1.1rem}
+.rank li.pior{border-color:var(--ouro);background:var(--ouro2)}.rank li.aberto{outline:2px solid var(--v)}
+.dias{display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:6px;margin-top:8px}.dias .btn{flex-direction:column;padding:8px}.dias small{font-weight:400}
+.sub{display:block;margin:8px 0 2px;font-size:.85rem}.sobe{color:var(--v);font-weight:700}
