@@ -1,8 +1,8 @@
 // Service worker: guarda o app no aparelho para abrir sem internet.
 // Com internet: sempre busca a versão mais nova no GitHub (e atualiza a cópia).
 // Sem internet: usa a cópia guardada.
-const VERSAO = 'rotas-v15';
-const ARQUIVOS = ['./', 'index.html', 'css/app.css', 'js/config.js', 'js/regras.js', 'js/db.js', 'js/app.js',
+const VERSAO = 'rotas-v16';
+const ARQUIVOS = ['./', 'index.html', 'css/app.css', 'js/config.js', 'js/regras.js', 'js/db.js', 'js/rota.js', 'js/app.js',
   'manifest.webmanifest', 'img/icone-192.png', 'img/logo.png'];
 
 self.addEventListener('install', e => {
