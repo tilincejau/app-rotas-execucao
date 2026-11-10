@@ -13,18 +13,17 @@ const CHECK_ROTA = [
   ['atitude', 'Atitude e postura no varejista'],
   ['epi', 'Utilizou os EPIs em toda a rota']
 ];
-const ORDENS_RANK = [['fat', 'Faturamento'], ['hl', 'Volume (HL)'], ['pos', 'Positivação %'], ['tick', 'Faturamento por cliente']];
+const ORDENS_RANK = [['cx', 'Caixas vendidas'], ['hl', 'Volume (HL)'], ['pos', 'Positivação % (clientes vendidos / base)'], ['cxcli', 'Caixas por cliente vendido']];
 const DIAS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-const moeda = v => 'R$ ' + Math.round(Number(v) || 0).toLocaleString('pt-BR');
 
 function rankingVendedores() {
   const sup = S.usuario.perfil === 'SV' ? S.usuario.sup : (S.filtros.sup || '');
   const vends = vendedoresDoEscopo(sup), R0 = S.pacote.vendRank || {};
   const l = vends.map(vd => {
     const r = R0[vd] || [0, 0, 0, S.clientes.filter(c => c.vend === vd).length];
-    return { vend: vd, fat: r[0], hl: r[1], posit: r[2], cart: r[3], pos: r[3] ? r[2] / r[3] * 100 : 0, tick: r[2] ? r[0] / r[2] : 0 };
+    return { vend: vd, cx: r[0], hl: r[1], posit: r[2], cart: r[3], pos: r[3] ? r[2] / r[3] * 100 : 0, cxcli: r[2] ? r[0] / r[2] : 0 };
   }).filter(x => x.cart > 0);
-  const k = S.filtros.ordemRank || 'fat';
+  const k = S.filtros.ordemRank || 'cx';
   l.sort((a, b) => b[k] - a[k]);              // 1º = melhor
   l.forEach((x, i) => { x.pos_rank = i + 1; x.total = l.length; });
   return l;
@@ -39,7 +38,7 @@ function visitasDaRota(rota = S.rota) {
 
 /* ---------- TELA: escolher vendedor ---------- */
 function tRotaSel() {
-  const l = rankingVendedores(), k = S.filtros.ordemRank || 'fat', pior = l[l.length - 1];
+  const l = rankingVendedores(), k = S.filtros.ordemRank || 'cx', pior = l[l.length - 1];
   return `<section>
     <button class="voltar" data-acao="ir" data-v="objetivos">‹ Objetivos</button>
     <h2>Rota completa – escolha o vendedor</h2>
@@ -48,7 +47,10 @@ function tRotaSel() {
     <ul class="lista rank">${l.slice().reverse().map(x => `<li class="${x === pior ? 'pior' : ''} ${S.rotaVendSel === x.vend ? 'aberto' : ''}" data-acao="rotaVend" data-v="${esc(x.vend)}">
       <span class="pos">${x.pos_rank}º</span>
       <div><b>Vendedor ${esc(x.vend)}</b> ${x === pior ? '<span class="tag alerta">pior resultado</span>' : ''}
-        <small>${moeda(x.fat)} · ${n1(x.hl)} HL · positivação ${n1(x.pos)}% (${x.posit}/${x.cart}) · ${moeda(x.tick)}/cliente</small>
+        <div class="grid4 rk">
+          <span>Caixas<b>${n1(x.cx)}</b></span><span>HL<b>${n1(x.hl)}</b></span>
+          <span>Clientes vendidos<b>${x.posit} de ${x.cart}</b></span><span>Positivação<b>${n1(x.pos)}%</b></span>
+        </div>
         ${S.rotaVendSel === x.vend ? `<div class="dias">${DIAS.map(d => { const n = S.clientes.filter(c => c.vend === x.vend && c.dia === d).length;
           return n ? `<button class="btn" data-acao="rotaIniciar" data-v="${d}">${d}<small>${n} PDVs</small></button>` : ''; }).join('')}</div>` : ''}
       </div></li>`).join('')}</ul>
@@ -70,7 +72,7 @@ function tRota() {
   return `<section>
     <button class="voltar" data-acao="ir" data-v="resumo">‹ Resumo (a rota fica salva)</button>
     <div class="card destaque"><div class="lin sp"><div><b>Rota do vendedor ${esc(r.vend)} – ${esc(r.dia)}</b>
-      <small>Ranking ${nomeMes(1)}: ${rk.pos_rank || '–'}º de ${rk.total || '–'} · ${moeda(rk.fat)} · positivação ${n1(rk.pos)}%</small></div>
+      <small>Ranking ${nomeMes(1)}: ${rk.pos_rank || '–'}º de ${rk.total || '–'} · ${n1(rk.cx)} cx · ${n1(rk.hl)} HL · ${rk.posit || 0} de ${rk.cart || 0} clientes vendidos (${n1(rk.pos)}%)</small></div>
       <div class="big">${feitos.size}<small>/${cli.length}</small></div></div>
       <div class="barra"><i style="width:${cli.length ? feitos.size / cli.length * 100 : 0}%"></i></div><small>PDVs da rota visitados</small></div>
 
@@ -151,7 +153,7 @@ async function salvarRota() {
     id: uid(), mes: mesAtual(), data: hoje(), objetivo: 'ROTA_FECHAMENTO', objetivoNome: 'Fechamento de rota completa',
     cod: `ROTA-${r.vend}-${r.dia}`, fantasia: `Rota vendedor ${r.vend} – ${r.dia}`, sup: (cli[0] || {}).sup || S.usuario.sup, vend: r.vend,
     cidade: [...new Set(cli.map(c => c.cidade))].join(', '), dia: r.dia, canalCadastro: '', canal: '', canalCorreto: true,
-    respostas: { ...a, ranking: rk.pos_rank + 'º de ' + rk.total, criterioRanking: S.filtros.ordemRank || 'fat', clientesRota: cli.length,
+    respostas: { ...a, ranking: rk.pos_rank + 'º de ' + rk.total, criterioRanking: S.filtros.ordemRank || 'cx', clientesRota: cli.length,
       visitados: vis.map(v => v.cod), fdsRota: fds.lista.map(x => `${x.g}:${x.ok}/${x.total}`).join(' ') },
     resumo: { fds: fds.real, fdsMeta: fds.meta, fortes: a.fortes, oport: a.oport, notaCoaching: notaChk,
       obs: `Nota vendedor: ${a.nota}/5 · ${vis.length}/${cli.length} PDVs · ranking ${rk.pos_rank}º de ${rk.total} · Plano FDS: ${a.planoFds} · Plano produtos: ${a.planoProd}` },
