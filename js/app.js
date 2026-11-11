@@ -57,7 +57,7 @@ async function sincronizar(forcarDados) {
         S.outbox = S.outbox.filter(x => x.id !== v.id);
         // cópia local do que já foi enviado: a visita nunca some da tela, mesmo se a lista do servidor atrasar
         S.enviados = (S.enviados || []).filter(x => x.mes === mesAtual() && x.id !== v.id);
-        S.enviados.push({ id: v.id, data: v.data, mes: v.mes, cod: v.cod, objetivo: v.objetivo, objetivoNome: v.objetivoNome, vendedor: v.vend, ...v.resumo });
+        S.enviados.push({ enviadoEm: Date.now(), id: v.id, data: v.data, mes: v.mes, cod: v.cod, objetivo: v.objetivo, objetivoNome: v.objetivoNome, vendedor: v.vend, ...v.resumo });
         await DB.set('enviados', S.enviados);
       }
       else { v.erroEnvio = r.msg || r.erro; }
@@ -69,7 +69,14 @@ async function sincronizar(forcarDados) {
     if (forcarDados || !S.pacote || ver.versao !== S.pacote.versao) await baixarDados();
     // 3) visitas do mês (de todos)
     const vs = await API.chamar({ acao: 'visitas', token: S.token, mes: mesAtual() });
-    if (vs.ok) { S.visitasServ = vs.visitas; await DB.set('visitas', vs.visitas); await DB.set('ultimaSync', new Date().toISOString()); }
+    if (vs.ok) {
+      S.visitasServ = vs.visitas; await DB.set('visitas', vs.visitas); await DB.set('ultimaSync', new Date().toISOString());
+      // A planilha manda: a cópia local só vale até a planilha listar a visita (ou por 10 min).
+      // Se as respostas forem apagadas na planilha, o app também zera.
+      const naPlanilha = new Set(vs.visitas.map(x => x.id));
+      S.enviados = (S.enviados || []).filter(x => !naPlanilha.has(x.id) && x.enviadoEm && Date.now() - x.enviadoEm < 10 * 60 * 1000);
+      await DB.set('enviados', S.enviados);
+    }
   } catch (e) {
     console.warn('sync', e);
   } finally { S.sincronizando = false; render(); }
@@ -184,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 26</p>
+    <p class="dica" style="text-align:center">versão 27</p>
   </section>`;
 }
 async function fazerLogin(form) {
