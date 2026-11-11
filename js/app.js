@@ -150,6 +150,7 @@ function render() {
   const telas = { login: tLogin, resumo: tResumo, objetivos: tObjetivos, pdv: tPdv, visita: tVisita, rotaSel: tRotaSel, rota: tRota, rotaFech: tRotaFech };
   $app.innerHTML = (S.tela !== 'login' ? cabecalho() : '') + (telas[S.tela] || tLogin)();
   marcarSugestoes();
+  if (typeof iniciarAssinaturas === 'function') iniciarAssinaturas();
   if (S.tela === 'pdv') { const b = document.getElementById('busca'); if (b && S._focoBusca) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); } }
 }
 
@@ -183,7 +184,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 24</p>
+    <p class="dica" style="text-align:center">versão 25</p>
   </section>`;
 }
 async function fazerLogin(form) {
