@@ -204,6 +204,11 @@ function tRotaFechCorpo() {
     ${rTexto('oport', 'OPORTUNIDADES DA ROTA', 'Ex.: baixo share de RGB no bairro X, falta de sinalização de TTV nos bares menores, estoques desorganizados no cliente final', true, 'O que precisa melhorar para a próxima visita?')}
     <div class="card"><b>Qual a sua nota para a execução do seu vendedor? *</b><small>1 = muito ruim · 5 = excelente</small>
       ${rRadio('nota', [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']])}</div>
+    <div class="card"><b>Assinaturas *</b><small>Assine com o dedo dentro do quadro. Elas saem no boletim da rota.</small>
+      ${[['assVend', 'Vendedor ' + esc(S.rota.vend)], ['assSup', 'Supervisor ' + esc(S.usuario.nome || '')]].map(([k, rot]) => `
+      <div class="assin"><canvas data-assin="${k}"></canvas><div class="lin sp"><small>${rot}</small>
+        <button class="btn peq" data-acao="rotaLimparAss" data-v="${k}">Limpar</button></div></div>`).join('')}
+    </div>
     <div id="erros"></div>
     <div class="lin"><button class="btn" data-acao="rotaPasso" data-v="2" style="flex:1">‹ Voltar</button>
       <button class="btn pri" data-acao="rotaSalvar" style="flex:2">Salvar fechamento da rota ✔</button></div>
@@ -217,6 +222,8 @@ function validarRota() {
   if (!t(a.fortes)) e.push('Descreva os pontos fortes da rota');
   if (!t(a.oport)) e.push('Descreva as oportunidades da rota');
   if (!a.nota) e.push('Dê a nota de 1 a 5 para o vendedor');
+  if (!a.assVend) e.push('Falta a assinatura do vendedor');
+  if (!a.assSup) e.push('Falta a assinatura do supervisor');
   return e;
 }
 // Dados completos da rota para o boletim do relatório (PDV a PDV, produtos, ativos, SKUs)
@@ -276,8 +283,9 @@ async function salvarRota() {
       detalhe: detalheRota(rk, fds, at, sk) },
     resumo: { fds: fds.real, fdsMeta: fds.meta, skus: n1(sk.media), fortes: a.fortes, oport: a.oport, notaCoaching: notaChk,
       obs: `Nota vendedor: ${a.nota}/5 · ${cli.length} PDVs · ranking ${rk.pos_rank}º de ${rk.total} · FDS ${n1(pct(fds.antT, fds.totT))}% → ${n1(pct(fds.okT, fds.totT))}% · Plano FDS: ${a.planoFds} · Plano ativos: ${a.planoAtivos || '-'} · Plano produtos: ${a.planoProd}` },
-    fotos: []
+    fotos: [a.assVend ? { tipo: 'assinatura_vendedor', dados: a.assVend } : null, a.assSup ? { tipo: 'assinatura_supervisor', dados: a.assSup } : null].filter(Boolean)
   };
+  delete reg.respostas.assVend; delete reg.respostas.assSup;   // as imagens vão como fotos, não no texto
   S.outbox.push(reg); await DB.set('outbox', S.outbox);
   S.rota = null; await DB.del('rota');
   S.tela = 'resumo'; render(); scrollTo(0, 0); sincronizar();
@@ -297,6 +305,7 @@ async function acaoRota(a, v, el) {
     case 'rotaCancelar': if (!confirm('Cancelar esta rota? As visitas já salvas continuam valendo.')) return; S.rota = null; await DB.del('rota'); S.tela = 'resumo'; break;
     case 'rotaSugerir': { const k = el.dataset.k, at = AV()[k] || ''; if (!v || at.includes(v)) return; AV()[k] = at.trim() ? at.trimEnd() + '\n' + v : v; await DB.set('rota', S.rota); break; }
     case 'rotaMesSkus': S.rota.mesSkus = Number(v); break;
+    case 'rotaLimparAss': delete AV()[v]; await DB.set('rota', S.rota); break;
     case 'rotaSalvar': return salvarRota();
   }
   render();
@@ -309,3 +318,24 @@ document.addEventListener('change', e => {
   const t = e.target; if (!t.dataset.rk || !S.rota || t.type !== 'radio') return;
   setPath(AV(), t.dataset.rk, t.value); DB.set('rota', S.rota); render();
 });
+
+/* ---------- assinatura com o dedo ---------- */
+function iniciarAssinaturas() {
+  document.querySelectorAll('canvas[data-assin]').forEach(cv => {
+    const k = cv.dataset.assin, dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * dpr; cv.height = h * dpr;
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1d2420';
+    if (AV()[k]) { const im = new Image(); im.onload = () => ctx.drawImage(im, 0, 0, w, h); im.src = AV()[k]; }
+    let desenhando = false, ult = null;
+    const ponto = ev => { const r = cv.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+    cv.onpointerdown = ev => { desenhando = true; ult = ponto(ev); cv.setPointerCapture(ev.pointerId); ev.preventDefault(); };
+    cv.onpointermove = ev => { if (!desenhando) return; const p = ponto(ev); ctx.beginPath(); ctx.moveTo(ult[0], ult[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); ult = p; ev.preventDefault(); };
+    cv.onpointerup = cv.onpointercancel = () => {
+      if (!desenhando) return; desenhando = false;
+      const out = document.createElement('canvas'); out.width = 600; out.height = Math.round(600 * h / w);
+      const o = out.getContext('2d'); o.fillStyle = '#fff'; o.fillRect(0, 0, out.width, out.height); o.drawImage(cv, 0, 0, out.width, out.height);
+      AV()[k] = out.toDataURL('image/jpeg', 0.8); DB.set('rota', S.rota);
+    };
+  });
+}
