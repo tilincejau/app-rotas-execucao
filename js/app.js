@@ -172,7 +172,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 18</p>
+    <p class="dica" style="text-align:center">versão 19</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -280,6 +280,15 @@ const tendRgb = v => v[2] > v[4] ? '<span class="sobe">▲ subindo</span>' : v[2
 const ordemRgb = o => S.filtros.ordem || (o.ordenarQueda ? 'queda' : 'pot');
 
 /* TELA 4 — ESCOLHA DO PDV */
+// FDS do PDV: mês anterior (comprou algum produto do item, aba vendas) x mês atual (aba FDS)
+function fdsAntAtual(cod) {
+  const l = S.pacote.fds[cod] || [], ant = (S.pacote.fdsAnt || {})[cod] || [];
+  const meta = l.reduce((s, x) => s + x[2], 0);
+  const antPts = l.filter(x => ant.includes(x[0])).reduce((s, x) => s + x[2], 0), atPts = l.reduce((s, x) => s + x[3], 0);
+  return { total: l.length, antOk: l.filter(x => ant.includes(x[0])).length, atOk: l.filter(x => x[1]).length, meta, antPts, atPts,
+    antPct: meta ? antPts / meta * 100 : 0, atPct: meta ? atPts / meta * 100 : 0 };
+}
+const ORDENS_FDS = [['fdsAnt', 'FDS mês anterior (%)'], ['fdsAt', 'FDS mês atual (%)']];
 function clientesFiltrados() {
   const f = S.filtros, o = objCfg(S.objetivo), b = f.busca.trim().toLowerCase();
   let l = S.clientes.filter(c =>
@@ -290,6 +299,14 @@ function clientesFiltrados() {
     const k = ordemRgb(o), sinal = (f.dir || 'desc') === 'desc' ? -1 : 1;
     const val = c => { const v = volDe(c.cod); return { pot: v[3], rgb: v[2], share: shareRgb(v[2], v[3]), total: v[2] + v[3], queda: v[4] - v[2] }[k]; };
     l = l.map(c => [c, val(c)]).sort((a, b2) => sinal * (a[1] - b2[1])).map(x => x[0]);
+  }
+  if (o.bloco === 'trade') {
+    const hlAnt = c => ((S.pacote.hl || {})[c.cod] || [0, 0])[1];
+    if (o.fdsBaixa) l = l.filter(c => (S.pacote.fds[c.cod] || []).length && (f.soCompradores === false || hlAnt(c) > 0));
+    const k = f.ordem || (o.fdsBaixa ? 'fdsAnt' : ''), sinal = (f.dir || (o.fdsBaixa ? 'asc' : 'desc')) === 'desc' ? -1 : 1;
+    // empate no %: PDVs que mais compraram (HL do mês anterior) primeiro
+    if (k) l = l.map(c => { const x = fdsAntAtual(c.cod); return [c, k === 'fdsAnt' ? x.antPct : x.atPct, hlAnt(c)]; })
+      .sort((a, b2) => sinal * (a[1] - b2[1]) || b2[2] - a[2]).map(x => x[0]);
   }
   return l;
 }
@@ -320,12 +337,18 @@ function tPdv() {
       <label>Ordenar por<select data-filtro="ordem">${ORDENS_RGB.map(([k, t]) => `<option value="${k}" ${ordemRgb(o) === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label>Ordem<select data-filtro="dir"><option value="desc" ${(f.dir || 'desc') === 'desc' ? 'selected' : ''}>Maior → menor</option><option value="asc" ${f.dir === 'asc' ? 'selected' : ''}>Menor → maior</option></select></label>
     </div>` : ''}
+    ${o.fdsBaixa ? `<label class="chk"><input type="checkbox" data-filtro="soCompradores" ${f.soCompradores !== false ? 'checked' : ''}> Só PDVs que compraram em ${nomeMes(1)} (tira PDVs parados)</label>` : ''}
+    ${o.bloco === 'trade' ? `<div class="filtros">
+      <label>Ordenar por<select data-filtro="ordem"><option value="">Padrão (código)</option>${ORDENS_FDS.map(([k, t]) => `<option value="${k}" ${(f.ordem || (o.fdsBaixa ? 'fdsAnt' : '')) === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label>Ordem<select data-filtro="dir"><option value="asc" ${(f.dir || (o.fdsBaixa ? 'asc' : 'desc')) === 'asc' ? 'selected' : ''}>Piores primeiro</option><option value="desc" ${(f.dir || (o.fdsBaixa ? 'asc' : 'desc')) === 'desc' ? 'selected' : ''}>Melhores primeiro</option></select></label>
+    </div>` : ''}
     <p class="dica">${lista.length} PDV(s)${lista.length > 150 ? ' – mostrando 150, use os filtros' : ''}${o.bloco === 'rgb' ? ` · volumes em caixas de ${nomeMes(1)} (mês anterior). Potencial = volume descartável que pode virar RGB.` : ''}</p>
     <ul class="lista pdvs">${mostrar.map(c => {
       const meu = jaFizEste(c.cod), outros = visitasDeOutros(c.cod), v = volDe(c.cod);
-      const queda = o.bloco !== 'rgb' ? '' : `<small class="vol"><b>${nomeMes(1)}:</b> RGB ${n1(v[2])} cx · Desc ${n1(v[3])} cx · <b>${n1(shareRgb(v[2], v[3]))}% RGB</b></small>` +
+      const queda = (o.bloco !== 'rgb' ? '' : `<small class="vol"><b>${nomeMes(1)}:</b> RGB ${n1(v[2])} cx · Desc ${n1(v[3])} cx · <b>${n1(shareRgb(v[2], v[3]))}% RGB</b></small>` +
         (ordemRgb(o) === 'queda' ? `<small class="${v[2] < v[4] ? 'erro' : ''}">RGB ${nomeMes(2)} ${n1(v[4])} → ${nomeMes(1)} ${n1(v[2])} cx</small>` : '') +
-        (o.escolheTipoRgb ? `<small><span class="tag">${tipoRgbAuto(c.cod)}</span> ${tendRgb(v)}</small>` : '');
+        (o.escolheTipoRgb ? `<small><span class="tag">${tipoRgbAuto(c.cod)}</span> ${tendRgb(v)}</small>` : '')) +
+        (o.bloco === 'trade' && (S.pacote.fds[c.cod] || []).length ? (x => `<small class="vol">${o.fdsBaixa ? `${n1(((S.pacote.hl || {})[c.cod] || [0, 0])[1])} HL em ${nomeMes(1)} · ` : ''}<b>FDS ${nomeMes(1)}:</b> ${x.antOk}/${x.total} itens (${n1(x.antPct)}%) · <b>${nomeMes(0)}:</b> ${x.atOk}/${x.total} itens (${n1(x.atPct)}%)</small>`)(fdsAntAtual(c.cod)) : '');
       return `<li class="${meu ? 'feito' : ''}" data-acao="${meu ? 'jaFeito' : 'abrirPdv'}" data-v="${c.cod}">
         <span class="ck">${meu ? '✔' : ''}</span>
         <div><b>${esc(c.cod)} – ${esc(c.fantasia)}</b><small>${esc(c.canal)} · ${esc(c.cidade)} · vend ${esc(c.vend)} · ${esc(c.dia)}</small>${queda}</div>
@@ -554,6 +577,17 @@ function sugestaoOport() {
   if (!temGeladeira()) out.push('Avaliar implantação de geladeira');
   return out.join('. ') + (out.length ? '.' : '');
 }
+function sugestaoAlavancas() {
+  const f = calcFds(), v = vitoriosos(), out = [];
+  if (f.faltam.length) out.push('FDS: trabalhar positivação de ' + f.faltam.slice(0, 4).join(', '));
+  out.push(`Visibilidade: ${calcVisib()}/100 no canal ${S.draft.canal}`);
+  if (temGeladeira()) out.push(`Geladeira: posicionamento ${calcAtivos()}/100, ${statusGiroGel()}`);
+  else out.push('Geladeira: PDV sem geladeira da Cia – avaliar implantação');
+  const aus = SEGMENTOS_VITORIOSOS.filter(k => !v[k].length); if (aus.length) out.push('SKUs vitoriosos ausentes: ' + aus.join(', '));
+  out.push(`SKUs por PDV: ${skusDoPdv().length} SKU(s) comprados no mês`);
+  if (R().precificadas === 'N') out.push('Preço: cervejas sem precificação');
+  return out.join('. ') + '.';
+}
 function blocoFortesOport(req) {
   return `${texto('fortes', 'Pontos fortes', 'O que o PDV / vendedor faz bem', req)}
     ${texto('oport', 'Oportunidades', 'O que precisa melhorar', req)}
@@ -605,11 +639,17 @@ function pObj() {
       ${blocoFortesOport(false)}`;
   }
   if (o.bloco === 'trade') {
-    const al = r.trade.alavancas;
-    return `<div class="campo"><b>Alavancas trabalhadas neste PDV *</b>${ALAVANCAS_TRADE.map((a, i) => `<label class="chk grande"><input type="checkbox" data-acao="alavanca" data-v="${i}" ${al.includes(a) ? 'checked' : ''}><span>${esc(a)}</span></label>`).join('')}</div>
-      ${al.includes(ALAVANCAS_TRADE[6]) ? `<div class="campo"><b>Cadastro do PDV confere com o BWC?</b>${radio('trade.cadastro', [['S', 'Sim'], ['N', 'Não']])}</div>
-        ${r.trade.cadastro === 'N' ? texto('trade.cadastroObs', 'O que está divergente?', '', true) : ''}` : ''}
-      ${al.includes(ALAVANCAS_TRADE[5]) ? texto('trade.plataformas', 'Plataformas / KSMs / programas / inovações observados') : ''}
+    const x = fdsAntAtual(S.draft.cod);
+    return `${o.fdsBaixa ? `<div class="card destaque"><b>FDS do PDV</b><div class="grid4">
+        <span>${nomeMes(1)} itens<b>${x.antOk}/${x.total}</b></span><span>${nomeMes(1)} pontos<b>${n1(x.antPct)}%</b></span><span>&nbsp;<b>${x.atPct > x.antPct ? '<span class="sobe">▲</span>' : x.atPct < x.antPct ? '<span class="erro">▼</span>' : '='}</b></span>
+        <span>${nomeMes(0)} itens<b>${x.atOk}/${x.total}</b></span><span>${nomeMes(0)} pontos<b>${n1(x.atPct)}%</b></span></div></div>
+      ${texto('trade.planoFds', 'Plano de ação para melhorar o FDS deste PDV', 'Ex.: positivar Heineken 600 e Amstel Lata no próximo pedido; reposicionar na geladeira', true)}
+      <button class="btn peq" data-acao="sugerir" data-k="trade.planoFds" data-v="${esc(calcFds().faltam.length ? 'Positivar: ' + calcFds().faltam.join(', ') + '.' : '')}">✨ Sugerir pelos itens faltantes</button>` : ''}
+      ${texto('trade.alavancasTexto', 'Alavancas trabalhadas neste PDV', 'Descreva o que foi trabalhado. Toque nos exemplos abaixo para inserir e complete os ___', true)}
+      <div class="chips">${EXEMPLOS_ALAVANCAS.map(([t, ex]) => `<button class="btn peq" data-acao="sugerir" data-k="trade.alavancasTexto" data-v="${esc(ex)}">+ ${esc(t)}</button>`).join('')}</div>
+      <button class="btn peq" data-acao="sugerir" data-k="trade.alavancasTexto" data-v="${esc(sugestaoAlavancas())}">✨ Sugerir pelo que a visita encontrou</button>
+      <div class="campo"><b>Cadastro do PDV confere com o BWC?</b>${radio('trade.cadastro', [['S', 'Sim'], ['N', 'Não'], ['NA', 'Não verificado']])}</div>
+      ${r.trade.cadastro === 'N' ? texto('trade.cadastroObs', 'O que está divergente?', '', true) : ''}
       ${blocoFortesOport(true)}`;
   }
   return `${blocoFortesOport(false)}`;
@@ -671,8 +711,10 @@ function validar(i) {
     }
     if (o.bloco === 'rota' && !r.rota.seguiuPlano) e.push('Informe se a visita seguiu o planejamento do vendedor');
     if (o.bloco === 'trade') {
-      if (!r.trade.alavancas.length) e.push('Marque ao menos uma alavanca');
-      if (r.trade.alavancas.includes(ALAVANCAS_TRADE[6]) && !r.trade.cadastro) e.push('Informe se o cadastro confere com o BWC');
+      if (!txt(r.trade.alavancasTexto)) e.push('Descreva as alavancas trabalhadas neste PDV');
+      if ((r.trade.alavancasTexto || '').includes('___')) e.push('Complete os campos ___ nas alavancas');
+      if (o.fdsBaixa && !txt(r.trade.planoFds)) e.push('Descreva o plano de ação do FDS');
+      if (r.trade.cadastro === 'N' && !txt(r.trade.cadastroObs, 5)) e.push('Descreva o que está divergente no cadastro');
       fo();
     }
   }
@@ -726,7 +768,7 @@ document.addEventListener('click', async e => {
     case 'descartarENova': clearTimeout(_tmr); S.draft = null; await DB.del('rascunho'); S.modalResumo = false; S.tela = 'objetivos'; break;
     case 'continuarRascunho': S.modalResumo = false; S.objetivo = S.draft.objetivo; S.tela = 'visita'; S.passo = S.draft.passo || 0; scrollTo(0, 0); break;
     case 'descartarRascunho': if (!confirm('Descartar a visita em andamento?')) return; clearTimeout(_tmr); S.draft = null; await DB.del('rascunho'); break;
-    case 'escolherObjetivo': S.objetivo = v; S.filtros.vend = ''; S.filtros.busca = ''; S.filtros.ordem = ''; S.filtros.dir = 'desc';
+    case 'escolherObjetivo': S.objetivo = v; S.filtros.vend = ''; S.filtros.busca = ''; S.filtros.ordem = ''; S.filtros.dir = objCfg(v).bloco === 'trade' ? '' : 'desc';
       S.tela = v === 'ROTA_COMPLETA' ? (S.rota ? 'rota' : 'rotaSel') : 'pdv'; S.rotaVendSel = null; scrollTo(0, 0); break;
     case 'abrirPdv': return modalPdv(v);
     case 'jaFeito': { const m = minhasVisitas().find(x => x.cod === v); alert(`Você já registrou este PDV em ${m.data} (${objCfg(m.objetivo).curto}). Cada PDV só pode ser feito uma vez por você no mês.`); return; }
