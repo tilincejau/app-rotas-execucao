@@ -172,7 +172,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 19</p>
+    <p class="dica" style="text-align:center">versão 20</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -648,8 +648,6 @@ function pObj() {
       ${texto('trade.alavancasTexto', 'Alavancas trabalhadas neste PDV', 'Descreva o que foi trabalhado. Toque nos exemplos abaixo para inserir e complete os ___', true)}
       <div class="chips">${EXEMPLOS_ALAVANCAS.map(([t, ex]) => `<button class="btn peq" data-acao="sugerir" data-k="trade.alavancasTexto" data-v="${esc(ex)}">+ ${esc(t)}</button>`).join('')}</div>
       <button class="btn peq" data-acao="sugerir" data-k="trade.alavancasTexto" data-v="${esc(sugestaoAlavancas())}">✨ Sugerir pelo que a visita encontrou</button>
-      <div class="campo"><b>Cadastro do PDV confere com o BWC?</b>${radio('trade.cadastro', [['S', 'Sim'], ['N', 'Não'], ['NA', 'Não verificado']])}</div>
-      ${r.trade.cadastro === 'N' ? texto('trade.cadastroObs', 'O que está divergente?', '', true) : ''}
       ${blocoFortesOport(true)}`;
   }
   return `${blocoFortesOport(false)}`;
@@ -714,7 +712,6 @@ function validar(i) {
       if (!txt(r.trade.alavancasTexto)) e.push('Descreva as alavancas trabalhadas neste PDV');
       if ((r.trade.alavancasTexto || '').includes('___')) e.push('Complete os campos ___ nas alavancas');
       if (o.fdsBaixa && !txt(r.trade.planoFds)) e.push('Descreva o plano de ação do FDS');
-      if (r.trade.cadastro === 'N' && !txt(r.trade.cadastroObs, 5)) e.push('Descreva o que está divergente no cadastro');
       fo();
     }
   }
