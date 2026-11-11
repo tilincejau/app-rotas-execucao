@@ -253,7 +253,7 @@ async function acaoRota(a, v, el) {
     case 'rotaPasso': S.rota.passo = Math.max(0, Math.min(3, Number(v))); await DB.set('rota', S.rota); scrollTo(0, 0); break;
     case 'rotaContinuar': S.objetivo = 'ROTA_COMPLETA'; S.tela = 'rota'; break;
     case 'rotaCancelar': if (!confirm('Cancelar esta rota? As visitas já salvas continuam valendo.')) return; S.rota = null; await DB.del('rota'); S.tela = 'resumo'; break;
-    case 'rotaSugerir': { const k = el.dataset.k, at = AV()[k]; AV()[k] = at ? at + '\n' + v : v; await DB.set('rota', S.rota); break; }
+    case 'rotaSugerir': { const k = el.dataset.k, at = AV()[k] || ''; if (!v || at.includes(v)) return; AV()[k] = at.trim() ? at.trimEnd() + '\n' + v : v; await DB.set('rota', S.rota); break; }
     case 'rotaMesSkus': S.rota.mesSkus = Number(v); break;
     case 'rotaSalvar': return salvarRota();
   }
