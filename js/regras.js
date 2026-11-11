@@ -38,11 +38,13 @@ const PERFIS = {
     ]
   },
   TRADE: {
-    nome: 'Supervisor de Trade e Marketing', minimoTotal: 40,
-    regra: 'Mínimo 40 PDVs diferentes com foco nas alavancas de Trade.',
+    nome: 'Supervisor de Trade e Marketing', minimoTotal: 50,
+    regra: 'Mínimo 50 PDVs diferentes: 40 nas alavancas de Trade + 10 de baixa performance no FDS.',
     objetivos: [
       { id: 'TRADE', nome: 'Alavancas de Trade Marketing', curto: 'Trade', min: 40, bloco: 'trade',
-        desc: '4Ps, FDS, SKUs/PDV, vitoriosos, geladeira, plataformas/KSMs/inovações e cadastro x BWC.' }
+        desc: '4Ps, FDS, SKUs/PDV, vitoriosos, geladeira, plataformas/KSMs/inovações e cadastro x BWC.' },
+      { id: 'FDS_BAIXA', nome: 'Baixa performance no FDS', curto: 'FDS baixa perf.', min: 10, bloco: 'trade', fdsBaixa: true,
+        desc: '10 PDVs com pior realização de FDS. A lista vem ordenada pelo pior FDS do mês anterior.' }
     ]
   }
 };
@@ -120,6 +122,17 @@ const COACHING = [
     'Registrou informações no sistema / app' ] }
 ];
 
+// Exemplos para o campo "Alavancas trabalhadas neste PDV" (toque para inserir no texto)
+const EXEMPLOS_ALAVANCAS = [
+  ['4Ps', '4Ps: preço ponta ajustado ao TTV sugerido; produto exposto na geladeira e na gôndola; material de comunicação aplicado.'],
+  ['FDS', 'FDS (P de presença): positivado ___ que estava faltando; combinado pedido de ___ com o vendedor.'],
+  ['SKUs/PDV', 'SKUs por PDV: incluído(s) ___ novo(s) SKU(s) no mix do PDV: ___.'],
+  ['Vitoriosos', 'SKUs vitoriosos: apresentado ___ (Premium/Mainstream/Craft/Lono) para o dono do PDV.'],
+  ['Geladeira', 'Geladeira: organizada no planograma, retirada invasão da concorrência, abastecida acima de 75%.'],
+  ['Implantação', 'Geladeira: PDV com volume para implantação – solicitada avaliação de comodato.'],
+  ['Plataformas', 'Plataformas/KSMs/programas: ativação de ___ (campanha/inovação) com material de PDV.'],
+  ['Cadastro BWC', 'Cadastro x BWC: conferido; canal/endereço corrigido de ___ para ___.']
+];
 const TIPOS_RGB = ['Maiores clientes', 'Maiores quedas', 'Maiores COMPASS não compradores'];
 const MOTIVOS_QUEDA = ['Preço da concorrência', 'Falta de vasilhame', 'Ruptura / entrega', 'Comprou de outro distribuidor', 'Sazonalidade', 'Mudança de mix', 'Crédito / financeiro', 'Outro'];
 const ALAVANCAS_TRADE = [
