@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 27</p>
+    <p class="dica" style="text-align:center">versão 28</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -745,6 +745,31 @@ function validar(i) {
   return e;
 }
 
+/* Espelho da visita: tudo o que a pessoa viu e respondeu, para a ficha do relatório */
+function espelhoVisita() {
+  const P = S.pacote, d = S.draft, cod = d.cod, r = R(), o = objCfg(d.objetivo), sn = v => v === 'S' ? 'Sim' : v === 'N' ? 'Não' : v === 'P' ? 'Parcial' : (v || '');
+  const prods = P.fdsProdutos[cod] || {};
+  const e = {
+    nota: notaPdv(resumoVisita()),
+    // FDS: [item, positivado(1/0), meta, pontos, produtos comprados no mês, visto no PDV(1/0)]
+    fds: (P.fds[cod] || []).map(x => [NOMES_FDS[x[0]] || x[0], x[1], x[2], x[3], (prods[x[0]] || []).map(p => p[1]).join('; '), r.fdsVisto[x[0]] ? 1 : 0]),
+    visib: { tabela: CANAL_PARA_VISIB[d.canal] || 'DEMAIS CANAIS', itens: itensVisib().map((x, i) => [x[0], x[1], r.visib[i] ? 1 : 0]) },
+    ativos: temGeladeira()
+      ? { gel: 1, geladeiras: (P.geladeiras[cod] || []).map(g => [g[0], g[2], g[3], g[6], g[7]]), perguntas: POSIC_GELADEIRA.map(([k, t, p]) => [t, sn(r.ativos[k]), r.ativos[k] === 'S' ? p : 0, p]),
+          giro: statusGiroGel(), planoGiro: r.ativos.planoGiro || '' }
+      : { gel: 0, perguntas: [['Há cerveja da Cia refrigerada?', sn(r.ativos.ciaRefrig), r.ativos.ciaRefrig === 'S' ? 50 : 0, 50], ['SKUs obrigatórios presentes estão refrigerados?', sn(r.ativos.obrigRefrig), r.ativos.obrigRefrig === 'S' ? 50 : 0, 50]] },
+    outrosAtivos: [].concat((P.chopeiras[cod] || []).map(x => ['Chopeira', x[0], x[4], x[7]]), (P.vasilhames[cod] || []).map(x => ['Vasilhame', x[0], x[4], x[7]])),
+    obsAtivos: r.ativos.obs || '',
+    preco: { precificadas: sn(r.precificadas), marcas: MARCAS_PRECO.map(m => { const x = r.precos[m] || {}; return [m === 'M1' && x.marca ? 'M1 (' + (x.marca === 'Outra' ? x.marcaOutra : x.marca) + ')' : m, x.na ? 'N/A' : (x.ttc || ''), x.na ? 'N/A' : (x.ttv || '')]; }),
+      promocao: r.promocao || '', posicionamento: r.posicionamento || '' },
+    skus: { lista: skusDoPdv().map(x => [x[1], [x[3], ehLono(x) && x[3] !== 'Lono' ? 'Lono' : ''].filter(Boolean).join(' + '), x[2] ? 1 : 0]), resumo: r.resumoSkus || '' },
+    obsGeral: r.obsGeral || ''
+  };
+  if (o.bloco === 'coaching') e.coaching = { etapas: COACHING.map(et => [et.nome, et.itens.map((it, i) => [it, ({ 2: 'Sim', 1: 'Parcial', 0: 'Não' })[r.coaching.notas[et.id + i]] || ''])]),
+    nota: notaCoaching(), pedido: sn(r.coaching.pedido), valorPedido: r.coaching.valorPedido || '', feedback: sn(r.coaching.feedback), compromisso: r.coaching.compromisso || '' };
+  if (o.bloco === 'rgb') { const v = volDe(cod); e.rgb = { mesAnt: nomeMes(1), mesAt: nomeMes(0), vol: v, skusRgb: ((P.rgbSkus || {})[cod] || []).map(x => [x[1], x[2]]) }; }
+  return e;
+}
 async function salvarVisita() {
   const erros = PASSOS.slice(0, 6).flatMap((_, i) => validar(i));
   if (erros.length) { alert('Faltam informações:\n- ' + erros.join('\n- ')); return; }
@@ -752,6 +777,7 @@ async function salvarVisita() {
   const d = S.draft;
   if (d.respostas.coaching.vendedor) d.vend = d.respostas.coaching.vendedor;
   d.resumo = resumoVisita();
+  d.respostas.espelho = espelhoVisita();
   if (d.respostas.obsGeral) d.resumo.obs = [d.resumo.obs, d.respostas.obsGeral].filter(Boolean).join(' | ');
   S.outbox.push(d); await DB.set('outbox', S.outbox);
   clearTimeout(_tmr); S.draft = null; await DB.del('rascunho');
