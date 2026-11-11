@@ -184,7 +184,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 25</p>
+    <p class="dica" style="text-align:center">versão 26</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -664,6 +664,12 @@ function pObj() {
   }
   return `${blocoFortesOport(false)}`;
 }
+/* ---- Nota do PDV (4Ps): Presença 50% + Visibilidade 30% + Posicionamento 10% + Preço 10% ---- */
+function notaPdv(s) {
+  const partes = [[s.fdsMeta ? Math.min(100, s.fds / s.fdsMeta * 100) : null, .5], [s.visib, .3], [s.ativos, .1], [s.preco, .1]].filter(x => x[0] != null && x[0] !== '');
+  const peso = partes.reduce((t, x) => t + x[1], 0);
+  return peso ? Math.round(partes.reduce((t, x) => t + Number(x[0]) * x[1], 0) / peso * 10) / 10 : '';
+}
 /* ---- PASSO 7: REVISÃO ---- */
 function resumoVisita() {
   const f = calcFds(), v = vitoriosos(), r = R(), o = objCfg(S.draft.objetivo);
@@ -673,8 +679,10 @@ function resumoVisita() {
     notaCoaching: o.bloco === 'coaching' ? notaCoaching() : '' };
 }
 function pRev() {
-  const s = resumoVisita(), erros = PASSOS.slice(0, 6).flatMap((_, i) => validar(i));
-  return `<div class="card"><ul class="rev">
+  const s = resumoVisita(), erros = PASSOS.slice(0, 6).flatMap((_, i) => validar(i)), nota = notaPdv(s);
+  return `${nota !== '' ? `<div class="card destaque lin sp"><div><div class="big" style="color:${nota >= 80 ? '#0a7a3c' : nota >= 60 ? '#9a6200' : '#c0392b'}">${n1(nota)}<small>/100</small></div>Nota do PDV (4Ps)</div>
+      <small style="text-align:right">Presença 50%<br>Visibilidade 30%<br>Posicionamento 10%<br>Preço 10%</small></div>` : ''}
+    <div class="card"><ul class="rev">
       <li>FDS – presença<b>${n1(s.fds)}/${n1(s.fdsMeta)}</b></li><li>Visibilidade<b>${s.visib}/100</b></li>
       <li>${temGeladeira() ? 'Posicionamento geladeira' : 'Refrigeração'}<b>${s.ativos + '/100'}</b></li><li>Precificação<b>${s.preco ?? '–'}</b></li>
       <li>SKUs presentes<b>${s.skus}</b></li><li>Vitoriosos<b>${esc(s.vitoriosos || '–')}</b></li>
