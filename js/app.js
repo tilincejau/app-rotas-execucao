@@ -149,9 +149,20 @@ const uniq = arr => [...new Set(arr)].filter(Boolean).sort((a, b) => String(a).l
 function render() {
   const telas = { login: tLogin, resumo: tResumo, objetivos: tObjetivos, pdv: tPdv, visita: tVisita, rotaSel: tRotaSel, rota: tRota, rotaFech: tRotaFech };
   $app.innerHTML = (S.tela !== 'login' ? cabecalho() : '') + (telas[S.tela] || tLogin)();
+  marcarSugestoes();
   if (S.tela === 'pdv') { const b = document.getElementById('busca'); if (b && S._focoBusca) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); } }
 }
 
+// Botões de sugestão já usados ficam marcados (✓) e não inserem de novo
+function marcarSugestoes() {
+  document.querySelectorAll('[data-acao="sugerir"],[data-acao="rotaSugerir"]').forEach(b => {
+    const k = b.dataset.k, v = b.dataset.v;
+    const at = b.dataset.acao === 'sugerir' ? (S.draft ? getPath(R(), k) : '') : (S.rota && S.rota.aval ? S.rota.aval[k] : '');
+    const usado = !!(v && at && String(at).includes(v));
+    b.classList.toggle('usado', usado);
+    if (usado && !b.textContent.startsWith('✓')) b.textContent = '✓ ' + b.textContent.replace(/^[+✨]\s*/u, '');
+  });
+}
 function cabecalho() {
   const on = navigator.onLine;
   return `<header class="top">
@@ -172,7 +183,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 20</p>
+    <p class="dica" style="text-align:center">versão 21</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -784,7 +795,10 @@ document.addEventListener('click', async e => {
     case 'sairVisita': salvarRascunho(); S.tela = 'resumo'; scrollTo(0, 0); break; // rascunho fica salvo
     case 'salvarVisita': return salvarVisita();
     case 'delFoto': S.draft.fotos.splice(Number(v), 1); salvarRascunho(); break;
-    case 'sugerir': { const k = el.dataset.k, at = getPath(R(), k); setPath(R(), k, at ? at + '\n' + v : v); salvarRascunho(); break; }
+    case 'sugerir': { // insere só uma vez: se o texto já está no campo, não repete
+      const k = el.dataset.k, at = getPath(R(), k) || '';
+      if (!v || at.includes(v)) return;
+      setPath(R(), k, at.trim() ? at.trimEnd() + '\n' + v : v); salvarRascunho(); break; }
     case 'sync': sincronizar(true); return;
     case 'sair': return sair();
   }
