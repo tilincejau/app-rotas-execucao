@@ -90,7 +90,7 @@ function skusDaRota(mes = 0) { // 0 = mês atual (skus_pdv) · 1 = mês anterior
   const P = S.pacote, cli = clientesDaRota(), cont = {}, seg = {}; let tot = 0, compraram = 0;
   SEGMENTOS_VITORIOSOS.forEach(k => seg[k] = 0);
   cli.forEach(c => {
-    const l = mes ? ((P.skusAnt || {})[c.cod] || []).map(x => [x[0], (P.prodNome || {})[x[0]] || x[0], 0, x[1]]) : (P.skus[c.cod] || []);
+    const l = mes ? ((P.skusHist || {})[c.cod] || []).filter(x => x[1] & 2).map(x => [x[0], (P.prodNome || {})[x[0]] || x[0], x[3], x[2]]) : (P.skus[c.cod] || []);
     if (l.length) { compraram++; tot += l.length; }
     const temSeg = {};
     l.forEach(s => { (cont[s[0]] = cont[s[0]] || [s[0], s[1], 0])[2]++; if (s[3] && s[3] !== 'Lono') temSeg[s[3]] = 1; if (ehLono(s)) temSeg.Lono = 1; });

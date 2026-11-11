@@ -81,3 +81,16 @@ marcas de preço, alavancas de Trade e nomes dos itens FDS.
 - Ativos vêm de `refrigeracao_comodatos`, `vasilhames_comodatos`, `chopeiras_giro` e das abas de giro.
 - SKUs e vitoriosos vêm de `skus_pdv` × `produtos` (Craft, Mainstream, Premium, Economy, Fys, Lono).
 - Para o objetivo de quedas de RGB, a lista é ordenada pela maior queda de HL retornável do mês anterior em relação ao retrasado.
+
+## 5. Relatórios de evidências (e-mail diário + fechamento do mês)
+
+O arquivo `apps-script/Relatorios.gs` gera 6 relatórios: PROPRIETARIO, GV, SV, TRADE_40, TRADE_10 e GC.
+Cada um vira uma planilha Google com logo, resumo das metas, uma aba por objetivo (com data/hora, GPS e fotos de cada visita), os boletins da rota completa e as pendências.
+
+- **Onde ficam:** na pasta do Drive `1qRP_4z2mD7YGdgmv5IS2qLa4f3eIzlap`, numa subpasta por mês. Durante o mês os arquivos vão sendo substituídos.
+- **Dia 1:** FECHAMENTO do mês anterior. **A partir do dia 2:** parcial do mês atual.
+- **E-mail:** sai **um único e-mail** com todos os relatórios de cada pessoa (PDF + Excel). Quem recebe os mesmos relatórios vai junto no mesmo e-mail.
+- **PROPRIETARIO:** só é gerado (fica na pasta) e nunca é enviado.
+- **Aba `destinatarios`:** uma linha por relatório. A linha **TODOS** recebe tudo e a linha **TESTE** recebe o `testarRelatorios`.
+
+Funções: `testarRelatorios` (teste), `instalarGatilhoRelatorios` (envio diário às 7h).

@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 28</p>
+    <p class="dica" style="text-align:center">versão 29</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -409,7 +409,7 @@ function novaVisita(cod, canalNovo) {
     id: uid(), mes: mesAtual(), data: hoje(), objetivo: o.id, objetivoNome: o.nome,
     cod, fantasia: c.fantasia, sup: c.sup, vend: c.vend, cidade: c.cidade, dia: c.dia,
     canalCadastro: c.canal, canal: canalNovo || c.canal, canalCorreto: !canalNovo,
-    respostas: { visib: {}, ativos: { gel: (S.pacote.geladeiras[cod] || []).length ? 'SIM' : 'NAO' }, precos: {}, fdsVisto: {},
+    respostas: { visib: {}, ativos: { gel: (S.pacote.geladeiras[cod] || []).length ? 'SIM' : 'NAO' }, precos: {}, fdsVisto: {}, skusConf: {},
       coaching: { vendedor: o.id === 'ROTA_COMPLETA' && S.rota ? S.rota.vend : o.exigeVendedor ? (S.filtros.vend || c.vend) : '', notas: {} }, rgb: {}, rota: {}, trade: { alavancas: [] } },
     fotos: []
   };
@@ -462,13 +462,57 @@ function statusGiroGel() { // pior status entre as geladeiras do PDV
   return st.find(x => /zero/i.test(x)) || st.find(x => /baixo/i.test(x)) || st.find(x => /ok/i.test(x)) || (l.length ? 'Sem dado de giro' : 'Fora da base');
 }
 const giroRuim = () => /zero|baixo/i.test(statusGiroGel());
+// Histórico de giro (3 meses) de cada equipamento: a[7] atual, a[8] mês anterior, a[9] retrasado · a[6], a[10], a[11] = giro HL
+const ruimG = st => /zero|baixo/i.test(st || ''), okG = st => /ok/i.test(st || ''), zeroG = st => /zero/i.test(st || '');
+function diagGiro(a) {
+  const s0 = a[7], s1 = a[8], s2 = a[9];
+  if (!s0 && !s1 && !s2) return { tipo: 'sem', rot: 'Sem dado de giro', plano: false };
+  if (zeroG(s0) && zeroG(s1) && zeroG(s2)) return { tipo: 'recolher', rot: 'Giro zero nos 3 meses', plano: true };
+  if (!ruimG(s0)) return { tipo: 'ok', rot: okG(s0) ? 'Giro OK' : (s0 || 'Sem dado'), plano: false };
+  if (okG(s1) && okG(s2)) return { tipo: 'acompanhar', rot: 'Vem batendo a meta – acompanhar', plano: false };
+  if (ruimG(s1) && ruimG(s2)) return { tipo: 'critico', rot: 'Abaixo da meta há 3 meses', plano: true };
+  if (ruimG(s1)) return { tipo: 'queda', rot: 'Caiu nos últimos 2 meses', plano: true };
+  return { tipo: 'oscila', rot: 'Giro oscilando', plano: true };
+}
+function equipAtivos() { // equipamentos considerados na análise de giro
+  const P = S.pacote, cod = S.draft.cod;
+  return [].concat(temGeladeira() ? (P.geladeiras[cod] || []).map(a => ['Geladeira', a]) : [],
+    (P.chopeiras[cod] || []).map(a => ['Chopeira', a]), (P.vasilhames[cod] || []).map(a => ['Vasilhame', a]));
+}
+const precisaPlanoGiro = () => equipAtivos().some(([, a]) => diagGiro(a).plano);
+function sugestaoPlanoGiro() {
+  const dia = new Date().getDate(), m0 = nomeMes(0), m1 = nomeMes(1), m2 = nomeMes(2), out = [];
+  equipAtivos().forEach(([tp, a]) => {
+    const d = diagGiro(a), nm = `${tp} ${a[0]}`;
+    if (d.tipo === 'recolher') out.push(`${nm}: giro zero em ${m2}, ${m1} e ${m0}. Avaliar recolhimento/remanejamento para um PDV com potencial; antes, confirmar com o PDV se há interesse em retomar a compra.`);
+    if (d.tipo === 'critico') out.push(`${nm}: abaixo da meta há 3 meses (${m2} ${a[9]}, ${m1} ${a[8]}, ${m0} ${a[7]}). Plano de recuperação: combinar pedido de ___ cx, positivar ___, revisar preço e abastecimento; reavaliar em 30 dias e, se não reagir, remanejar o equipamento.`);
+    if (d.tipo === 'queda') out.push(`${nm}: estava OK em ${m2} e caiu em ${m1} e ${m0}. Entender o motivo (concorrência, preço, ruptura, sazonalidade) e combinar pedido de ___ cx para voltar à meta.`);
+    if (d.tipo === 'oscila') out.push(`${nm}: giro oscilando (${m2} ${a[9]}, ${m1} ${a[8]}, ${m0} ${a[7]}). Garantir frequência de pedido (semanal) com ___ para estabilizar.`);
+    if (d.tipo === 'acompanhar') out.push(`${nm}: PDV vem batendo a meta mês a mês (${m2} e ${m1} OK); ainda estamos no início do mês (dia ${dia}) – acompanhar o giro até o fechamento.`);
+  });
+  return [...new Set(out)].join('\n'); // mesmo material repetido entra uma vez só
+}
 function calcAtivos() {
   const a = R().ativos;
   if (temGeladeira()) return POSIC_GELADEIRA.reduce((t, [k, , p]) => t + (a[k] === 'S' ? p : 0), 0);
   return (a.ciaRefrig === 'S' ? 50 : 0) + (a.obrigRefrig === 'S' ? 50 : 0);
 }
 function calcPreco() { return R().precificadas === 'S' ? 100 : R().precificadas === 'N' ? 0 : null; }
-function skusDoPdv() { return S.pacote.skus[S.draft.cod] || []; }
+// SKUs dos últimos 3 meses: [cod, nome, estratégico, segmento, meses(bits 1=atual 2=ant 4=retrasado), presente]
+// Comprado no mês = presente. Comprado só nos meses anteriores = o usuário confirma se ainda tem no estoque do PDV.
+function skusHistPdv() {
+  const P = S.pacote, cod = S.draft.cod, conf = R().skusConf || {}, m = {};
+  (P.skus[cod] || []).forEach(x => m[x[0]] = [x[0], x[1], x[2], x[3], 1]);
+  ((P.skusHist || {})[cod] || []).forEach(x => {
+    const s = m[x[0]] = m[x[0]] || [x[0], (P.prodNome || {})[x[0]] || x[0], x[3], x[2], 0];
+    s[4] |= x[1]; if (x[3]) s[2] = 1; if (!s[3] && x[2]) s[3] = x[2];
+  });
+  return Object.values(m).map(s => [...s, s[4] & 1 ? 1 : conf[s[0]] === 'S' ? 1 : 0])
+    .sort((a, b) => (b[4] & 1) - (a[4] & 1) || (b[3] ? 1 : 0) - (a[3] ? 1 : 0) || a[1].localeCompare(b[1]));
+}
+const skusAConfirmar = () => skusHistPdv().filter(s => !(s[4] & 1));
+function skusDoPdv() { return skusHistPdv().filter(s => s[5]); }
+const mesesSku = b => [[4, 2], [2, 1], [1, 0]].filter(([bit]) => b & bit).map(([, i]) => nomeMes(i));
 const ehLono = s => SKUS_LONO.includes(String(s[0])) || s[3] === 'Lono';
 function vitoriosos() {
   const o = {}; SEGMENTOS_VITORIOSOS.forEach(s => o[s] = []);
@@ -527,13 +571,18 @@ function pVisib() {
     ${fotoBtn('visibilidade', 'Foto da visibilidade')}`;
 }
 /* ---- PASSO 3: ATIVOS ---- */
+function histGiro(a) {
+  const d = diagGiro(a), cel = (m, g, st) => `<span>${m}<b>${g === '' || g == null ? '–' : n2(g)}</b><i class="${ruimG(st) ? 'erro' : okG(st) ? 'sobe' : ''}">${esc(st || '–')}</i></span>`;
+  return `<div class="hist"><small>Giro HL – últimos 3 meses</small><div class="grid3">${cel(nomeMes(2), a[11], a[9])}${cel(nomeMes(1), a[10], a[8])}${cel(nomeMes(0) + ' (atual)', a[6], a[7])}</div>
+    <span class="tag ${d.plano ? 'alerta' : d.tipo === 'ok' || d.tipo === 'acompanhar' ? 'ok' : ''}">${esc(d.rot)}${d.plano ? ' · precisa de plano' : ''}</span></div>`;
+}
 function tabelaAtivos(titulo, l, extra) {
   if (!l || !l.length) return '';
   return `<div class="card"><b>${titulo} (${l.length})</b>${l.map(a => `<div class="ativo">
     <div><b>${esc(a[0])}</b> <small>${esc(a[1])}</small></div>
     <div class="grid4"><span>Emissão<b>${esc(a[2])}</b></span><span>Vencimento<b>${esc(a[3])}</b></span>
     <span>Qtd<b>${n1(a[4])}</b></span><span>Dias p/ vencer<b class="${a[5] < 0 ? 'erro' : ''}">${n1(a[5])}</b></span>
-    <span>Giro mês<b>${n2(a[6])}</b></span><span>Status giro<b class="${/zero|baixo/i.test(a[7]) ? 'erro' : ''}">${esc(a[7])}</b></span></div></div>`).join('')}${extra || ''}</div>`;
+    </div>${histGiro(a)}</div>`).join('')}${extra || ''}</div>`;
 }
 function pAtivos() {
   const cod = S.draft.cod, a = R().ativos, P = S.pacote, gelBase = temGelBase(cod);
@@ -546,43 +595,57 @@ function pAtivos() {
       <div class="card"><b>Posicionamento de nossos produtos</b>
         ${POSIC_GELADEIRA.map(([k, t, p]) => `<div class="item"><span>${t} (${p} pts)</span>${radio('ativos.' + k, [['S', 'Sim'], ['N', 'Não']])}</div>`).join('')}
         <div class="lin sp" style="margin-top:8px"><span>Pontuação</span><span class="pts">${calcAtivos()}/100</span></div></div>
-      <div class="card"><b>O PDV bate seu giro de refrigeração?</b>
-        <div class="lin sp"><span>Status giro (automático)</span><span class="tag ${giroRuim() ? 'alerta' : /ok/i.test(statusGiroGel()) ? 'ok' : ''}">${esc(statusGiroGel())}</span></div>
-        ${giroRuim() ? `<div class="aviso alerta">Giro abaixo do esperado: descreva o plano de ação para reverter.</div>${texto('ativos.planoGiro', 'Plano de ação para reversão do giro', 'Ex.: positivar Heineken 600, ação de preço, remanejar geladeira...', true)}` : ''}
-      </div>
       ${fotoBtn('geladeira', 'Foto da geladeira')}` : `
       <div class="card"><b>Refrigeração (PDV sem geladeira da Cia)</b>
         <div class="item"><span>Há cerveja da Cia refrigerada? (50 pts)</span>${radio('ativos.ciaRefrig', [['S', 'Sim'], ['N', 'Não']])}</div>
         <div class="item"><span>SKUs obrigatórios presentes estão refrigerados? (50 pts)</span>${radio('ativos.obrigRefrig', [['S', 'Sim'], ['N', 'Não']])}</div>
         <div class="lin sp" style="margin-top:8px"><span>Pontuação</span><span class="pts">${calcAtivos()}/100</span></div></div>`}
     ${outros ? `<h3>Outros equipamentos em comodato</h3>${tabelaAtivos('🍺 Chopeiras / outros', P.chopeiras[cod])}${tabelaAtivos('📦 Vasilhames', P.vasilhames[cod])}` : ''}
+    ${equipAtivos().length ? `<div class="card"><b>Plano de ação do giro</b>
+      ${precisaPlanoGiro() ? '<div class="aviso alerta">Há equipamento com giro abaixo da meta sem histórico bom nos meses anteriores: o plano é obrigatório.</div>'
+        : '<small>Nenhum equipamento precisa de plano (giro OK ou vem batendo a meta nos meses anteriores). Opcional.</small>'}
+      ${texto('ativos.planoGiro', 'Plano de ação / acompanhamento', 'Toque em ✨ para preencher pelo histórico e complete os ___', precisaPlanoGiro())}
+      <button class="btn peq" data-acao="sugerir" data-k="ativos.planoGiro" data-v="${esc(sugestaoPlanoGiro())}">✨ Sugerir pelo histórico de giro</button></div>` : ''}
     ${texto('ativos.obs', 'Observação dos ativos', 'Ex.: geladeira com concorrente, vasilhame parado, chopeira sem uso...')}`;
 }
 /* ---- PASSO 4: PREÇO ---- */
 function pPreco() {
   const pr = R().precos;
   return `<div class="campo"><b>Todas as nossas cervejas estão precificadas?</b>${radio('precificadas', [['S', 'Sim (100 pts)'], ['N', 'Não (0 pts)']])}</div>
-    <p class="dica">TTC = preço ao consumidor · TTV = preço de venda ao PDV. Marque N/A se a marca não está no PDV.</p>
+    <p class="dica">TTC = preço ao consumidor (prateleira). Marque N/A se a marca não está no PDV.</p>
     ${MARCAS_PRECO.map(m => { const x = pr[m] || {}; return `<div class="card preco ${x.na ? 'na' : ''}">
       <div class="lin sp"><b>${m}</b><label class="chk"><input type="checkbox" data-k="precos.${m}.na" data-rr ${x.na ? 'checked' : ''}> N/A</label></div>
       ${x.na ? '' : `${m === 'M1' ? `<label>Marca Ambev<select data-k="precos.M1.marca" data-rr><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${x.marca === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
       ${x.marca === 'Outra' ? `<label>Qual marca? *<input type="text" data-k="precos.M1.marcaOutra" value="${esc(x.marcaOutra || '')}" placeholder="Digite a marca"></label>` : ''}` : ''}
-      <div class="lin">${numero(`precos.${m}.ttc`, 'TTC R$')}${numero(`precos.${m}.ttv`, 'TTV R$')}</div>`}</div>`; }).join('')}
+      <div class="lin">${numero(`precos.${m}.ttc`, 'TTC R$')}</div>`}</div>`; }).join('')}
     <details><summary>Desejável (opcional): promoção e posicionamento</summary>
       ${texto('promocao', 'Promoção', 'Ação promocional nossa ou da concorrência')}
       <div class="campo"><b>Posicionamento na geladeira/gôndola</b>${radio('posicionamento', [['bom', 'Bom'], ['regular', 'Regular'], ['ruim', 'Ruim']])}</div>
     </details>`;
 }
-/* ---- PASSO 5: SKUs ---- */
+/* ---- PASSO 5: SKUs (3 meses) ---- */
+function linhaSku(s, conf) {
+  const tags = `${s[3] && s[3] !== 'Lono' ? `<span class="tag ok">${s[3]}</span>` : ''}${ehLono(s) ? '<span class="tag ok">Lono</span>' : ''}${s[2] ? '<span class="tag">estratégico</span>' : ''}`;
+  const meses = [[4, 2], [2, 1], [1, 0]].map(([bit, i]) => `<i class="mes ${s[4] & bit ? 'on' : ''}">${nomeMes(i)}</i>`).join('');
+  return `<li class="sku">${imgProd([s[0]], s[1], 'mini')}<div style="flex:1"><span>${esc(s[1])} <small>${esc(s[0])}</small></span><div class="meses">${meses}${tags}</div>
+    ${conf ? `<div class="item"><span>Ainda tem no estoque do PDV?</span>${radio('skusConf.' + s[0], [['S', 'Sim'], ['N', 'Não']])}</div>` : ''}</div></li>`;
+}
 function pSkus() {
-  const l = skusDoPdv(), v = vitoriosos(), tot = l.filter(s => s[3] || ehLono(s)).length;
+  const todos = skusHistPdv(), atual = todos.filter(s => s[4] & 1), conf = todos.filter(s => !(s[4] & 1)), r = R();
+  const l = skusDoPdv(), v = vitoriosos(), tot = l.filter(s => s[3] || ehLono(s)).length, pend = conf.filter(s => !(r.skusConf || {})[s[0]]).length;
   const pres = SEGMENTOS_VITORIOSOS.filter(k => v[k].length), aus = SEGMENTOS_VITORIOSOS.filter(k => !v[k].length);
-  const sugestao = (pres.length ? 'Vitoriosos presentes: ' + pres.map(k => `${k} (${v[k].length})`).join(', ') + '.' : 'Nenhum SKU vitorioso comprado no mês.') +
-    (aus.length ? ' Ausentes: ' + aus.join(', ') + '.' : ' Todos os segmentos presentes.');
+  const semEst = conf.filter(s => (r.skusConf || {})[s[0]] === 'N' && (s[3] || ehLono(s) || s[2])).map(s => s[1]);
+  const sugestao = (pres.length ? 'Vitoriosos presentes: ' + pres.map(k => `${k} (${v[k].length})`).join(', ') + '.' : 'Nenhum SKU vitorioso presente.') +
+    (aus.length ? ' Ausentes: ' + aus.join(', ') + '.' : ' Todos os segmentos presentes.') +
+    (semEst.length ? ' Comprados antes e sem estoque hoje (reposição): ' + semEst.slice(0, 6).join(', ') + '.' : '');
   return `<div class="card destaque lin sp"><div><div class="big">${l.length}</div>SKUs presentes</div><div><div class="big">${tot}</div>vitoriosos</div></div>
     <div class="segs">${SEGMENTOS_VITORIOSOS.map(k => `<div class="${v[k].length ? 'ok' : 'falta'}"><b>${v[k].length}</b>${k}</div>`).join('')}</div>
-    <details ${l.length < 12 ? 'open' : ''}><summary>Lista de SKUs comprados no mês (${l.length})</summary>
-      <ul class="lista mini">${l.map(s => `<li>${imgProd([s[0]], s[1], 'mini')}<span style="flex:1">${esc(s[1])} <small>${esc(s[0])}</small></span>${s[3] && s[3] !== 'Lono' ? `<span class="tag ok">${s[3]}</span>` : ''}${ehLono(s) ? '<span class="tag ok">Lono</span>' : ''}${s[2] ? '<span class="tag">estratégico</span>' : ''}</li>`).join('')}</ul></details>
+    <p class="dica">Considera os 3 últimos meses (${nomeMes(2)}, ${nomeMes(1)} e ${nomeMes(0)}). O que foi comprado em ${nomeMes(0)} conta como presente; o que foi comprado só antes, confirme se ainda está no estoque do PDV.</p>
+    ${conf.length ? `<div class="card"><div class="lin sp"><b>Comprados só em ${nomeMes(2)}/${nomeMes(1)} (${conf.length})</b>${pend ? `<span class="tag alerta">${pend} sem resposta</span>` : '<span class="tag ok">confirmado</span>'}</div>
+      <div class="lin"><button class="btn peq" data-acao="skusTodos" data-v="S">Todos Sim</button><button class="btn peq" data-acao="skusTodos" data-v="N">Todos Não</button></div>
+      <ul class="lista mini">${conf.map(s => linhaSku(s, true)).join('')}</ul></div>` : ''}
+    <details ${atual.length < 12 ? 'open' : ''}><summary>Comprados em ${nomeMes(0)} (${atual.length})</summary>
+      <ul class="lista mini">${atual.map(s => linhaSku(s, false)).join('')}</ul></details>
     ${texto('resumoSkus', 'Resumo do PDV com os SKUs vitoriosos presentes', 'Descreva os vitoriosos presentes e o que falta', true)}
     <button class="btn peq" data-acao="sugerir" data-k="resumoSkus" data-v="${esc(sugestao)}">✨ Preencher sugestão</button>`;
 }
@@ -647,7 +710,7 @@ function pObj() {
         ${r.rgb.concNA ? '<small>PDV não trabalha com retornável da concorrência.</small>' : `
         <label>Marca *<select data-k="rgb.marcaConc" data-rr><option value="">Selecione</option>${MARCAS_M1.map(b => `<option ${r.rgb.marcaConc === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
         ${r.rgb.marcaConc === 'Outra' ? `<label>Qual marca? *<input type="text" data-k="rgb.marcaConcOutra" value="${esc(r.rgb.marcaConcOutra || '')}" placeholder="Digite a marca"></label>` : ''}
-        <div class="lin">${numero('rgb.ttcConc', 'TTC conc. R$')}${numero('rgb.ttvConc', 'TTV conc. R$')}</div>`}</div>
+        <div class="lin">${numero('rgb.ttcConc', 'TTC conc. R$')}</div>`}</div>
       ${tipo === 'Maiores quedas' ? `<label>Motivo da queda *<select data-k="rgb.motivo"><option value="">Selecione</option>${MOTIVOS_QUEDA.map(m => `<option ${r.rgb.motivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
         ${texto('rgb.acao', 'Ação combinada para recuperar o volume', '', true)}` : ''}
       ${blocoFortesOport(false)}`;
@@ -707,16 +770,21 @@ function validar(i) {
   if (id === 'ativos') {
     if (temGeladeira()) {
       if (POSIC_GELADEIRA.some(([k]) => !r.ativos[k])) e.push('Responda as perguntas de posicionamento da geladeira');
-      if (giroRuim() && (r.ativos.planoGiro || '').trim().length < 10) e.push('Descreva o plano de ação para reverter o giro da geladeira');
     } else if (!r.ativos.ciaRefrig || !r.ativos.obrigRefrig) e.push('Responda as perguntas de refrigeração');
+    if (precisaPlanoGiro() && (r.ativos.planoGiro || '').trim().length < 10) e.push('Descreva o plano de ação do giro dos equipamentos');
+    if ((r.ativos.planoGiro || '').includes('___')) e.push('Complete os campos ___ no plano de giro');
   }
   if (id === 'preco') {
     if (!r.precificadas) e.push('Informe se as cervejas estão precificadas');
-    MARCAS_PRECO.forEach(m => { const x = r.precos[m] || {}; if (!x.na && (x.ttc === undefined || x.ttc === '' || x.ttv === undefined || x.ttv === '')) e.push(`Preencha TTC e TTV de ${m} ou marque N/A`); });
+    MARCAS_PRECO.forEach(m => { const x = r.precos[m] || {}; if (!x.na && (x.ttc === undefined || x.ttc === '')) e.push(`Preencha o TTC de ${m} ou marque N/A`); });
     if (r.precos.M1 && !r.precos.M1.na && !r.precos.M1.marca) e.push('Escolha a marca Ambev do M1');
     if (r.precos.M1 && !r.precos.M1.na && r.precos.M1.marca === 'Outra' && !(r.precos.M1.marcaOutra || '').trim()) e.push('Digite qual é a outra marca do M1');
   }
-  if (id === 'skus' && !txt(r.resumoSkus)) e.push('Descreva o resumo dos SKUs vitoriosos');
+  if (id === 'skus') {
+    const pend = skusAConfirmar().filter(s => !(r.skusConf || {})[s[0]]).length;
+    if (pend) e.push(`Confirme se ainda tem no estoque os ${pend} SKU(s) comprados nos meses anteriores`);
+    if (!txt(r.resumoSkus)) e.push('Descreva o resumo dos SKUs vitoriosos');
+  }
   if (id === 'obj') {
     const fo = () => { if (!txt(r.fortes)) e.push('Descreva os pontos fortes'); if (!txt(r.oport)) e.push('Descreva as oportunidades'); };
     if (o.bloco === 'coaching') {
@@ -755,14 +823,19 @@ function espelhoVisita() {
     fds: (P.fds[cod] || []).map(x => [NOMES_FDS[x[0]] || x[0], x[1], x[2], x[3], (prods[x[0]] || []).map(p => p[1]).join('; '), r.fdsVisto[x[0]] ? 1 : 0]),
     visib: { tabela: CANAL_PARA_VISIB[d.canal] || 'DEMAIS CANAIS', itens: itensVisib().map((x, i) => [x[0], x[1], r.visib[i] ? 1 : 0]) },
     ativos: temGeladeira()
-      ? { gel: 1, geladeiras: (P.geladeiras[cod] || []).map(g => [g[0], g[2], g[3], g[6], g[7]]), perguntas: POSIC_GELADEIRA.map(([k, t, p]) => [t, sn(r.ativos[k]), r.ativos[k] === 'S' ? p : 0, p]),
+      ? { gel: 1, geladeiras: (P.geladeiras[cod] || []).map(g => [g[0], g[2], g[3], g[6], g[7], g[11], g[9], g[10], g[8], diagGiro(g).rot]), perguntas: POSIC_GELADEIRA.map(([k, t, p]) => [t, sn(r.ativos[k]), r.ativos[k] === 'S' ? p : 0, p]),
           giro: statusGiroGel(), planoGiro: r.ativos.planoGiro || '' }
       : { gel: 0, perguntas: [['Há cerveja da Cia refrigerada?', sn(r.ativos.ciaRefrig), r.ativos.ciaRefrig === 'S' ? 50 : 0, 50], ['SKUs obrigatórios presentes estão refrigerados?', sn(r.ativos.obrigRefrig), r.ativos.obrigRefrig === 'S' ? 50 : 0, 50]] },
-    outrosAtivos: [].concat((P.chopeiras[cod] || []).map(x => ['Chopeira', x[0], x[4], x[7]]), (P.vasilhames[cod] || []).map(x => ['Vasilhame', x[0], x[4], x[7]])),
+    // outros: [tipo, material, qtd, status atual, giro atual, giro/status retrasado, giro/status anterior, diagnóstico]
+    outrosAtivos: [].concat((P.chopeiras[cod] || []).map(x => ['Chopeira', x]), (P.vasilhames[cod] || []).map(x => ['Vasilhame', x]))
+      .map(([t, x]) => [t, x[0], x[4], x[7], x[6], x[11], x[9], x[10], x[8], diagGiro(x).rot]),
+    mesesGiro: [nomeMes(2), nomeMes(1), nomeMes(0)], planoGiro: r.ativos.planoGiro || '',
     obsAtivos: r.ativos.obs || '',
-    preco: { precificadas: sn(r.precificadas), marcas: MARCAS_PRECO.map(m => { const x = r.precos[m] || {}; return [m === 'M1' && x.marca ? 'M1 (' + (x.marca === 'Outra' ? x.marcaOutra : x.marca) + ')' : m, x.na ? 'N/A' : (x.ttc || ''), x.na ? 'N/A' : (x.ttv || '')]; }),
+    preco: { precificadas: sn(r.precificadas), marcas: MARCAS_PRECO.map(m => { const x = r.precos[m] || {}; return [m === 'M1' && x.marca ? 'M1 (' + (x.marca === 'Outra' ? x.marcaOutra : x.marca) + ')' : m, x.na ? 'N/A' : (x.ttc || '')]; }),
       promocao: r.promocao || '', posicionamento: r.posicionamento || '' },
-    skus: { lista: skusDoPdv().map(x => [x[1], [x[3], ehLono(x) && x[3] !== 'Lono' ? 'Lono' : ''].filter(Boolean).join(' + '), x[2] ? 1 : 0]), resumo: r.resumoSkus || '' },
+    // SKUs 3 meses: [nome, segmento, estratégico, meses comprados, situação]
+    skus: { lista: skusHistPdv().map(x => [x[1], [x[3], ehLono(x) && x[3] !== 'Lono' ? 'Lono' : ''].filter(Boolean).join(' + '), x[2] ? 1 : 0, mesesSku(x[4]).join('/'),
+      x[4] & 1 ? 'Comprou no mês' : (r.skusConf || {})[x[0]] === 'S' ? 'Em estoque' : 'Sem estoque']), resumo: r.resumoSkus || '' },
     obsGeral: r.obsGeral || ''
   };
   if (o.bloco === 'coaching') e.coaching = { etapas: COACHING.map(et => [et.nome, et.itens.map((it, i) => [it, ({ 2: 'Sim', 1: 'Parcial', 0: 'Não' })[r.coaching.notas[et.id + i]] || ''])]),
@@ -841,6 +914,7 @@ document.addEventListener('click', async e => {
       const k = el.dataset.k, at = getPath(R(), k) || '';
       if (!v || at.includes(v)) return;
       setPath(R(), k, at.trim() ? at.trimEnd() + '\n' + v : v); salvarRascunho(); break; }
+    case 'skusTodos': { const r = R(); r.skusConf = r.skusConf || {}; skusAConfirmar().forEach(x => r.skusConf[x[0]] = v); salvarRascunho(); break; }
     case 'sync': sincronizar(true); return;
     case 'sair': return sair();
   }
