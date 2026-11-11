@@ -48,14 +48,26 @@ const PERFIS = {
     ]
   }
 };
+// GC: Gerente Comercial
+PERFIS.GC = {
+  nome: 'Gerente Comercial', minimoTotal: 30,
+  regra: 'Mínimo 30 PDVs diferentes: 10 FDS + 10 coaching + 10 maiores quedas RGB.',
+  objetivos: [
+    { id: 'FDS', nome: 'FDS', curto: 'FDS', min: 10, bloco: 'fds', desc: '10 PDVs – resultado do P de presença conforme matriz FDS.' },
+    { id: 'COACHING', nome: 'Coaching – rotina básica do vendedor', curto: 'Coaching', min: 10, bloco: 'coaching', exigeVendedor: true,
+      desc: '10 PDVs com foco na rotina básica do vendedor.' },
+    { id: 'RGB_QUEDA', nome: 'Maiores quedas RGB vs mês anterior', curto: 'Quedas RGB', min: 10, bloco: 'rgb', ordenarQueda: true,
+      desc: '10 PDVs com as maiores quedas de RGB. Obrigatório informar a causa da queda.' }
+  ]
+};
 // ADM: vê tudo e pode usar qualquer objetivo (para testes e acompanhamento).
 PERFIS.ADM = {
   nome: 'Administrador', minimoTotal: 0, regra: 'Acesso total para testes e acompanhamento.',
-  objetivos: [...PERFIS.GV.objetivos, ...PERFIS.SV.objetivos, ...PERFIS.PROPRIETARIO.objetivos, ...PERFIS.TRADE.objetivos]
+  objetivos: [...PERFIS.GV.objetivos, ...PERFIS.SV.objetivos, ...PERFIS.PROPRIETARIO.objetivos, ...PERFIS.TRADE.objetivos, ...PERFIS.GC.objetivos]
     .filter((o, i, a) => a.findIndex(x => x.id === o.id) === i)
 };
 // Hierarquia: quem pode repetir um PDV já feito por outro perfil (só gera aviso).
-const ORDEM_PERFIL = { SV: 1, GV: 2, TRADE: 3, PROPRIETARIO: 4, ADM: 5 };
+const ORDEM_PERFIL = { SV: 1, GV: 2, GC: 3, TRADE: 4, PROPRIETARIO: 5, ADM: 6 };
 
 // Nomes amigáveis dos grupos FDS (aba fds, coluna ProdFDS). Imagem: img/fds/<código>.png
 const NOMES_FDS = {
