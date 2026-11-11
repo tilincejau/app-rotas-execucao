@@ -219,6 +219,31 @@ function validarRota() {
   if (!a.nota) e.push('Dê a nota de 1 a 5 para o vendedor');
   return e;
 }
+// Dados completos da rota para o boletim do relatório (PDV a PDV, produtos, ativos, SKUs)
+function detalheRota(rk, fds, at, sk) {
+  const P = S.pacote, curto = (t, n = 34) => String(t || '').slice(0, n), prod = (P.vendProd || {})[S.rota.vend] || { mais: [], menos: [] };
+  const skAnt = skusDaRota(1);
+  return {
+    mesAt: nomeMes(0), mesAnt: nomeMes(1),
+    rank: { pos: rk.pos_rank, total: rk.total, cx: Math.round(rk.cx || 0), hl: Math.round((rk.hl || 0) * 10) / 10, posit: rk.posit, cart: rk.cart },
+    fds: { antPct: Math.round(pct(fds.antT, fds.totT) * 10) / 10, atPct: Math.round(pct(fds.okT, fds.totT) * 10) / 10, ptsPct: Math.round(pct(fds.real, fds.meta) * 10) / 10,
+      itens: fds.lista.map(x => [NOMES_FDS[x.g] || x.g, x.ant, x.ok, x.total]) },
+    // [código, PDV, canal, FDS ant, FDS atual, itens FDS, pontos %, HL mês ant, SKUs no mês, geladeira/giro, SKUs (nomes)]
+    pdvs: clientesDaRota().map(c => {
+      const l = P.fds[c.cod] || [], ant = (P.fdsAnt || {})[c.cod] || [], skus = P.skus[c.cod] || [];
+      const pts = l.reduce((s, x) => s + x[3], 0), meta = l.reduce((s, x) => s + x[2], 0);
+      const gel = (P.geladeiras[c.cod] || []).length ? at.pior(c) : '';
+      return [c.cod, curto(c.fantasia, 30), c.canal, l.filter(x => ant.includes(x[0])).length, l.filter(x => x[1]).length, l.length,
+        Math.round(pct(pts, meta)), Math.round(((P.hl || {})[c.cod] || [0, 0])[1] * 10) / 10, skus.length, gel, skus.slice(0, 8).map(x => curto(x[1], 28)).join('; ')];
+    }),
+    prodMais: prod.mais.map(p => [curto(p[1], 40), p[2]]), prodMenos: prod.menos.map(p => [curto(p[1], 40), p[2]]),
+    ativos: { pdvs: at.cli.length, comGel: at.comGel.length, qGel: at.qGel, giroOk: at.giro['Giro OK'].length, giroBaixo: at.giro['Giro Baixo'].length,
+      giroZero: at.giro['Giro Zero'].length, semDado: at.giro['Sem dado'].length, comChop: at.comChop.length, qChop: at.qChop, comVas: at.comVas.length, qVas: at.qVas,
+      metaGel: at.meta, potenciais: at.potenciais.slice(0, 25).map(x => [x.c.cod, curto(x.c.fantasia, 30), x.c.canal, x.hl]) },
+    skus: { media: Math.round(sk.media * 10) / 10, mediaAnt: Math.round(skAnt.media * 10) / 10, compraram: sk.compraram, seg: sk.seg,
+      top: sk.top.map(x => [curto(x[1], 40), x[2]]), poucos: sk.poucos.map(x => [curto(x[1], 40), x[2]]) }
+  };
+}
 async function salvarRota() {
   const er = validarRota();
   if (er.length) { document.getElementById('erros').innerHTML = `<div class="aviso erro">${er.map(esc).join('<br>')}</div>`; return; }
@@ -231,7 +256,8 @@ async function salvarRota() {
     respostas: { ...a, ranking: rk.pos_rank + 'º de ' + rk.total, criterioRanking: S.filtros.ordemRank || 'cx', clientesRota: cli.length,
       fdsRota: fds.lista.map(x => `${x.g}: ant ${x.ant}/${x.total} atual ${x.ok}/${x.total}`).join(' · '),
       ativosRota: `geladeiras ${at.comGel.length} PDVs (OK ${at.giro['Giro OK'].length}, baixo ${at.giro['Giro Baixo'].length}, zero ${at.giro['Giro Zero'].length}) · chopeiras ${at.comChop.length} · vasilhames ${at.comVas.length} · potenciais ${at.potenciais.map(x => x.c.cod).join(', ')}`,
-      skusRota: `${nomeMes(1)}: média ${n1(skusDaRota(1).media)} SKUs/PDV · ${nomeMes(0)}: média ${n1(sk.media)} SKUs/PDV · ${sk.compraram}/${cli.length} compraram · ` + SEGMENTOS_VITORIOSOS.map(k => k + ' ' + sk.seg[k]).join(', ') },
+      skusRota: `${nomeMes(1)}: média ${n1(skusDaRota(1).media)} SKUs/PDV · ${nomeMes(0)}: média ${n1(sk.media)} SKUs/PDV · ${sk.compraram}/${cli.length} compraram · ` + SEGMENTOS_VITORIOSOS.map(k => k + ' ' + sk.seg[k]).join(', '),
+      detalhe: detalheRota(rk, fds, at, sk) },
     resumo: { fds: fds.real, fdsMeta: fds.meta, skus: n1(sk.media), fortes: a.fortes, oport: a.oport, notaCoaching: notaChk,
       obs: `Nota vendedor: ${a.nota}/5 · ${cli.length} PDVs · ranking ${rk.pos_rank}º de ${rk.total} · FDS ${n1(pct(fds.antT, fds.totT))}% → ${n1(pct(fds.okT, fds.totT))}% · Plano FDS: ${a.planoFds} · Plano ativos: ${a.planoAtivos || '-'} · Plano produtos: ${a.planoProd}` },
     fotos: []
