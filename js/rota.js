@@ -220,6 +220,19 @@ function validarRota() {
   return e;
 }
 // Dados completos da rota para o boletim do relatório (PDV a PDV, produtos, ativos, SKUs)
+// Códigos de produto do item FDS para a foto: os comprados na rota primeiro, depois os do grupo
+function imgsFds(g) {
+  const P = S.pacote, cont = {};
+  clientesDaRota().forEach(c => (((P.fdsProdutos || {})[c.cod] || {})[g] || []).forEach(p => cont[p[0]] = (cont[p[0]] || 0) + 1));
+  const vendidos = Object.keys(cont).sort((a, b) => cont[b] - cont[a]);
+  return [...new Set(vendidos.concat((P.fdsRepresentantes || {})[g] || []))].slice(0, 5);
+}
+// SKUs estratégicos (aba skus_pdv, coluna SkuEstrategico) no mês atual
+function estrategicosDaRota() {
+  const P = S.pacote, cont = {}; let pdvs = 0;
+  clientesDaRota().forEach(c => { const l = (P.skus[c.cod] || []).filter(s => s[2]); if (l.length) pdvs++; l.forEach(s => (cont[s[0]] = cont[s[0]] || [String(s[1]).slice(0, 40), 0])[1]++); });
+  return { pdvs, total: clientesDaRota().length, lista: Object.values(cont).sort((a, b) => b[1] - a[1]).slice(0, 6) };
+}
 function detalheRota(rk, fds, at, sk) {
   const P = S.pacote, curto = (t, n = 34) => String(t || '').slice(0, n), prod = (P.vendProd || {})[S.rota.vend] || { mais: [], menos: [] };
   const skAnt = skusDaRota(1);
@@ -227,7 +240,9 @@ function detalheRota(rk, fds, at, sk) {
     mesAt: nomeMes(0), mesAnt: nomeMes(1),
     rank: { pos: rk.pos_rank, total: rk.total, cx: Math.round(rk.cx || 0), hl: Math.round((rk.hl || 0) * 10) / 10, posit: rk.posit, cart: rk.cart },
     fds: { antPct: Math.round(pct(fds.antT, fds.totT) * 10) / 10, atPct: Math.round(pct(fds.okT, fds.totT) * 10) / 10, ptsPct: Math.round(pct(fds.real, fds.meta) * 10) / 10,
-      itens: fds.lista.map(x => [NOMES_FDS[x.g] || x.g, x.ant, x.ok, x.total]) },
+      // [nome, PDVs positivados mês anterior, PDVs positivados mês atual, PDVs com o item, códigos de produto para a foto]
+      itens: fds.lista.map(x => [NOMES_FDS[x.g] || x.g, x.ant, x.ok, x.total, imgsFds(x.g)]) },
+    cidades: [...new Set(clientesDaRota().map(c => c.cidade))].sort(),
     // [código, PDV, canal, FDS ant, FDS atual, itens FDS, pontos %, HL mês ant, SKUs no mês, geladeira/giro, SKUs (nomes)]
     pdvs: clientesDaRota().map(c => {
       const l = P.fds[c.cod] || [], ant = (P.fdsAnt || {})[c.cod] || [], skus = P.skus[c.cod] || [];
@@ -241,7 +256,8 @@ function detalheRota(rk, fds, at, sk) {
       giroZero: at.giro['Giro Zero'].length, semDado: at.giro['Sem dado'].length, comChop: at.comChop.length, qChop: at.qChop, comVas: at.comVas.length, qVas: at.qVas,
       metaGel: at.meta, potenciais: at.potenciais.slice(0, 25).map(x => [x.c.cod, curto(x.c.fantasia, 30), x.c.canal, x.hl]) },
     skus: { media: Math.round(sk.media * 10) / 10, mediaAnt: Math.round(skAnt.media * 10) / 10, compraram: sk.compraram, seg: sk.seg,
-      top: sk.top.map(x => [curto(x[1], 40), x[2]]), poucos: sk.poucos.map(x => [curto(x[1], 40), x[2]]) }
+      top: sk.top.map(x => [curto(x[1], 40), x[2]]), poucos: sk.poucos.map(x => [curto(x[1], 40), x[2]]),
+      segAnt: skAnt.seg, compraramAnt: skAnt.compraram, estrategicos: estrategicosDaRota() }
   };
 }
 async function salvarRota() {
