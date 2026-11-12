@@ -123,3 +123,5 @@ li.sku .item{margin-top:4px}
 .segs .badge.ok{background:var(--v2);color:var(--v)}
 .segpainel{border:2px solid var(--v)}.segpainel>small{display:block;margin:6px 0 2px;color:var(--sub)}
 .eq{font-size:.8rem;margin-left:5px;white-space:nowrap}
+.fdsant{padding:8px 12px}.fdsant small{display:block;color:var(--sub);font-size:.72rem}.fdsant b{font-size:.92rem}
+.pts .ant{display:block;font-size:.66rem;font-weight:700;text-align:right}

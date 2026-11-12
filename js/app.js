@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 33</p>
+    <p class="dica" style="text-align:center">versão 34</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -569,14 +569,19 @@ const fotoBtn = (tipo, rot) => { const fs = S.draft.fotos.filter(f => f.tipo ===
 function pFds() {
   const l = S.pacote.fds[S.draft.cod] || [], prods = S.pacote.fdsProdutos[S.draft.cod] || {}, c = calcFds();
   if (!l.length) return '<div class="aviso info">Este PDV não tem matriz FDS na base deste mês.</div>';
+  const an = fdsAntAtual(S.draft.cod), antL = (S.pacote.fdsAnt || {})[S.draft.cod] || [], dif = c.real - an.antPts;
   return `<div class="card destaque lin sp"><div><div class="big">${n1(c.real)}<small>/${n1(c.meta)}</small></div>pontos de presença</div>
     <div class="big">${c.ok}<small>/${c.total}</small></div></div>
+    <div class="card fdsant lin sp"><div><small>${nomeMes(1)} (mês anterior)</small><b>${n1(an.antPts)}/${n1(an.meta)} pts · ${an.antOk}/${an.total} itens</b></div>
+      <span class="tag ${dif > 0 ? 'ok' : dif < 0 ? 'alerta' : ''}">${dif > 0 ? `▲ ${nomeMes(0)} já supera em ${n1(dif)} pts` : dif < 0 ? `faltam ${n1(-dif)} pts p/ igualar ${nomeMes(1)}` : `= igual a ${nomeMes(1)}`}</span></div>
+    ${l.some(x => !x[1] && antL.includes(x[0])) ? `<div class="aviso info">Recompra: ${l.filter(x => !x[1] && antL.includes(x[0])).map(x => NOMES_FDS[x[0]] || x[0]).join(', ')} – comprado(s) em ${nomeMes(1)} e ainda não em ${nomeMes(0)}.</div>` : ''}
     <p class="dica">Vem automático da aba FDS e das vendas do mês. Marque "visto no PDV" se encontrou um item faltante na loja (fica registrado como oportunidade de positivação).</p>
     <ul class="lista fds">${l.map(x => `<li class="${x[1] ? 'okk' : 'falta'}">${imgFds(x[0], prods[x[0]])}
       <div><b>${esc(NOMES_FDS[x[0]] || x[0])}</b> <small>(${esc(x[0])})</small>
       ${(prods[x[0]] || []).map(p => `<small class="vend">${imgProd([p[0]], p[1], 'mini')} ✔ ${esc(p[1])} <i>(${esc(p[0])})</i></small>`).join('')}
       ${!x[1] ? `<label class="chk"><input type="checkbox" data-k="fdsVisto.${x[0]}" ${R().fdsVisto[x[0]] ? 'checked' : ''}> visto no PDV</label>` : ''}</div>
-      <span class="pts">${n1(x[3])}/${n1(x[2])}</span></li>`).join('')}</ul>`;
+      <span class="pts">${n1(x[3])}/${n1(x[2])}<small class="ant ${antL.includes(x[0]) ? 'sobe' : 'erro'}">${nomeMes(1)} ${antL.includes(x[0]) ? '✔' : '✘'}</small></span></li>`).join('')}</ul>
+    <p class="dica">${nomeMes(1)}: itens da matriz atual que o PDV comprou no mês anterior (aba de vendas).</p>`;
 }
 /* ---- PASSO 2: VISIBILIDADE ---- */
 function pVisib() {
@@ -848,6 +853,7 @@ function espelhoVisita() {
   const prods = P.fdsProdutos[cod] || {};
   const e = {
     nota: notaPdv(resumoVisita()),
+    fdsAnt: (x => ({ mes: nomeMes(1), pts: x.antPts, meta: x.meta, ok: x.antOk, total: x.total }))(fdsAntAtual(cod)),
     // FDS: [item, positivado(1/0), meta, pontos, produtos comprados no mês, visto no PDV(1/0)]
     fds: (P.fds[cod] || []).map(x => [NOMES_FDS[x[0]] || x[0], x[1], x[2], x[3], (prods[x[0]] || []).map(p => p[1]).join('; '), r.fdsVisto[x[0]] ? 1 : 0]),
     visib: { tabela: CANAL_PARA_VISIB[d.canal] || 'DEMAIS CANAIS', itens: itensVisib().map((x, i) => [x[0], x[1], r.visib[i] ? 1 : 0]) },
