@@ -31,10 +31,18 @@ const API = {
     if (!navigator.onLine) throw new Error('OFFLINE');
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeoutMs);
     try {
-      const r = await fetch(API_URL, {
-        method: 'POST', body: JSON.stringify(corpo), signal: ctl.signal,
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' } // evita preflight CORS no Apps Script
-      });
+      let r;
+      try {
+        r = await fetch(API_URL, {
+          method: 'POST', body: JSON.stringify(corpo), signal: ctl.signal,
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' } // evita preflight CORS no Apps Script
+        });
+      } catch (e) {
+        if (e.name === 'AbortError') throw new Error('O servidor demorou demais para responder. Tente de novo em instantes.');
+        // "Failed to fetch": o navegador não conseguiu falar com o Apps Script (implantação arquivada, acesso restrito ou rede bloqueando)
+        throw new Error('Não foi possível falar com o servidor (Apps Script). Abra este link no navegador: ' + API_URL +
+          ' — se aparecer {"ok":true,"app":"rotas"} o servidor está OK (verifique a internet/rede da empresa); se aparecer página de erro ou de login, a implantação precisa ser corrigida.');
+      }
       const txt = await r.text();
       try { return JSON.parse(txt); } catch (_) { throw new Error(explicarHtml(txt)); }
     } finally { clearTimeout(t); }
