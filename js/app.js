@@ -2,7 +2,7 @@
 const S = {
   usuario: null, token: null, pacote: null, clientes: [], porCod: {},
   visitasServ: [], outbox: [], tela: 'login', objetivo: null,
-  filtros: { sup: '', vend: '', dia: '', cidade: '', busca: '', soBar: true },
+  filtros: { sup: '', vend: '', dia: '', cidade: '', busca: '', soBar: true, equip: '' },
   draft: null, passo: 0, msg: null, sincronizando: false
 };
 const $app = document.getElementById('app');
@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 30</p>
+    <p class="dica" style="text-align:center">versão 32</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -307,12 +307,19 @@ function fdsAntAtual(cod) {
   return { total: l.length, antOk: l.filter(x => ant.includes(x[0])).length, atOk: l.filter(x => x[1]).length, meta, antPts, atPts,
     antPct: meta ? antPts / meta * 100 : 0, atPct: meta ? atPts / meta * 100 : 0 };
 }
+// Filtro de equipamento em comodato (base refrigeracao_comodatos): geladeira (Freezer) e chopeira
+const FILTROS_EQUIP = [['gel', 'Com geladeira'], ['chop', 'Com chopeira'], ['gelchop', 'Com geladeira ou chopeira'], ['sem', 'Sem geladeira nem chopeira']];
+function equipDe(cod) { const P = S.pacote; return { gel: (P.geladeiras[cod] || []).length, chop: (P.chopeiras[cod] || []).length }; }
+function passaEquip(cod, f) {
+  if (!f) return true; const e = equipDe(cod);
+  return f === 'gel' ? e.gel > 0 : f === 'chop' ? e.chop > 0 : f === 'gelchop' ? e.gel + e.chop > 0 : f === 'sem' ? !e.gel && !e.chop : true;
+}
 const ORDENS_FDS = [['fdsAnt', 'FDS mês anterior (%)'], ['fdsAt', 'FDS mês atual (%)']];
 function clientesFiltrados() {
   const f = S.filtros, o = objCfg(S.objetivo), b = f.busca.trim().toLowerCase();
   let l = S.clientes.filter(c =>
     (!f.sup || c.sup === f.sup) && (!f.vend || c.vend === f.vend) && (!f.dia || c.dia === f.dia) &&
-    (!f.cidade || c.cidade === f.cidade) && (!o.soBar || !f.soBar || /^bar/i.test(c.canal)) &&
+    (!f.cidade || c.cidade === f.cidade) && passaEquip(c.cod, f.equip) && (!o.soBar || !f.soBar || /^bar/i.test(c.canal)) &&
     (!b || c.cod.includes(b) || c.fantasia.toLowerCase().includes(b) || c.razao.toLowerCase().includes(b)));
   if (o.bloco === 'rgb') {
     const k = ordemRgb(o), sinal = (f.dir || 'desc') === 'desc' ? -1 : 1;
@@ -347,6 +354,7 @@ function tPdv() {
       ${sel('vend', 'Vendedor' + (o.exigeVendedor ? ' *' : ''), uniq(base.map(c => c.vend)), o.exigeVendedor ? 'Escolha o vendedor' : 'Todos')}
       ${sel('dia', 'Dia (pasta)', ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].filter(d => baseV.some(c => c.dia === d)).concat(uniq(baseV.map(c => c.dia)).filter(d => d.startsWith('Outros'))))}
       ${sel('cidade', 'Cidade', uniq(baseD.map(c => c.cidade)))}
+      <label>Equipamento<select data-filtro="equip"><option value="">Todos os PDVs</option>${FILTROS_EQUIP.map(([k, t]) => `<option value="${k}" ${f.equip === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     </div>
     ${o.porVendedor ? (() => { const pr = progresso()[o.id]; return `<div class="card">${gradeVendedores(pr.porVend.filter(x => uniq(base.map(c => c.vend)).includes(x[0]) || !f.sup), pr.min, o.id, f.vend)}</div>`; })() : ''}
     ${o.soBar ? `<label class="chk"><input type="checkbox" data-filtro="soBar" ${f.soBar ? 'checked' : ''}> Mostrar só segmento BAR</label>` : ''}
@@ -363,14 +371,15 @@ function tPdv() {
     </div>` : ''}
     <p class="dica">${lista.length} PDV(s)${lista.length > 150 ? ' – mostrando 150, use os filtros' : ''}${o.bloco === 'rgb' ? ` · volumes em caixas de ${nomeMes(1)} (mês anterior). Potencial = volume descartável que pode virar RGB.` : ''}</p>
     <ul class="lista pdvs">${mostrar.map(c => {
-      const meu = jaFizEste(c.cod), outros = visitasDeOutros(c.cod), v = volDe(c.cod);
+      const meu = jaFizEste(c.cod), outros = visitasDeOutros(c.cod), v = volDe(c.cod), eq = equipDe(c.cod);
+      const icEq = (eq.gel ? `<span class="eq" title="Geladeira(s) em comodato">🧊${eq.gel > 1 ? eq.gel : ''}</span>` : '') + (eq.chop ? `<span class="eq" title="Chopeira(s) em comodato">🍺${eq.chop > 1 ? eq.chop : ''}</span>` : '');
       const queda = (o.bloco !== 'rgb' ? '' : `<small class="vol"><b>${nomeMes(1)}:</b> RGB ${n1(v[2])} cx · Desc ${n1(v[3])} cx · <b>${n1(shareRgb(v[2], v[3]))}% RGB</b></small>` +
         (ordemRgb(o) === 'queda' ? `<small class="${v[2] < v[4] ? 'erro' : ''}">RGB ${nomeMes(2)} ${n1(v[4])} → ${nomeMes(1)} ${n1(v[2])} cx</small>` : '') +
         (o.escolheTipoRgb ? `<small><span class="tag">${tipoRgbAuto(c.cod)}</span> ${tendRgb(v)}</small>` : '')) +
         (o.bloco === 'trade' && (S.pacote.fds[c.cod] || []).length ? (x => `<small class="vol">${o.fdsBaixa ? `${n1(((S.pacote.hl || {})[c.cod] || [0, 0])[1])} HL em ${nomeMes(1)} · ` : ''}<b>FDS ${nomeMes(1)}:</b> ${x.antOk}/${x.total} itens (${n1(x.antPct)}%) · <b>${nomeMes(0)}:</b> ${x.atOk}/${x.total} itens (${n1(x.atPct)}%)</small>`)(fdsAntAtual(c.cod)) : '');
       return `<li class="${meu ? 'feito' : ''}" data-acao="${meu ? 'jaFeito' : 'abrirPdv'}" data-v="${c.cod}">
         <span class="ck">${meu ? '✔' : ''}</span>
-        <div><b>${esc(c.cod)} – ${esc(c.fantasia)}</b><small>${esc(c.canal)} · ${esc(c.cidade)} · vend ${esc(c.vend)} · ${esc(c.dia)}</small>${queda}</div>
+        <div><b>${esc(c.cod)} – ${esc(c.fantasia)}</b>${icEq}<small>${esc(c.canal)} · ${esc(c.cidade)} · vend ${esc(c.vend)} · ${esc(c.dia)}</small>${queda}</div>
         ${outros.length ? `<span class="tag alerta" title="Já visitado por outro perfil">⚠ ${outros.length}</span>` : ''}
       </li>`;
     }).join('')}</ul>`}
@@ -498,21 +507,22 @@ function calcAtivos() {
   return (a.ciaRefrig === 'S' ? 50 : 0) + (a.obrigRefrig === 'S' ? 50 : 0);
 }
 function calcPreco() { return R().precificadas === 'S' ? 100 : R().precificadas === 'N' ? 0 : null; }
-// SKUs dos últimos 3 meses: [cod, nome, estratégico, segmento, meses(bits 1=atual 2=ant 4=retrasado), presente]
+// SKUs do mês atual + mês anterior: [cod, nome, estratégico, segmento, meses(bits 1=atual 2=ant 4=retrasado), presente]
 // Comprado no mês = presente. Comprado só nos meses anteriores = o usuário confirma se ainda tem no estoque do PDV.
 function skusHistPdv() {
   const P = S.pacote, cod = S.draft.cod, conf = R().skusConf || {}, m = {};
   (P.skus[cod] || []).forEach(x => m[x[0]] = [x[0], x[1], x[2], x[3], 1]);
   ((P.skusHist || {})[cod] || []).forEach(x => {
+    if (!(x[1] & 3)) return; // só mês atual e mês anterior (o retrasado não entra)
     const s = m[x[0]] = m[x[0]] || [x[0], (P.prodNome || {})[x[0]] || x[0], x[3], x[2], 0];
-    s[4] |= x[1]; if (x[3]) s[2] = 1; if (!s[3] && x[2]) s[3] = x[2];
+    s[4] |= x[1] & 3; if (x[3]) s[2] = 1; if (!s[3] && x[2]) s[3] = x[2];
   });
   return Object.values(m).map(s => [...s, s[4] & 1 ? 1 : conf[s[0]] === 'S' ? 1 : 0])
     .sort((a, b) => (b[4] & 1) - (a[4] & 1) || (b[3] ? 1 : 0) - (a[3] ? 1 : 0) || a[1].localeCompare(b[1]));
 }
 const skusAConfirmar = () => skusHistPdv().filter(s => !(s[4] & 1));
 function skusDoPdv() { return skusHistPdv().filter(s => s[5]); }
-const mesesSku = b => [[4, 2], [2, 1], [1, 0]].filter(([bit]) => b & bit).map(([, i]) => nomeMes(i));
+const mesesSku = b => [[2, 1], [1, 0]].filter(([bit]) => b & bit).map(([, i]) => nomeMes(i));
 const ehLono = s => SKUS_LONO.includes(String(s[0])) || s[3] === 'Lono';
 function vitoriosos() {
   const o = {}; SEGMENTOS_VITORIOSOS.forEach(s => o[s] = []);
@@ -623,10 +633,10 @@ function pPreco() {
       <div class="campo"><b>Posicionamento na geladeira/gôndola</b>${radio('posicionamento', [['bom', 'Bom'], ['regular', 'Regular'], ['ruim', 'Ruim']])}</div>
     </details>`;
 }
-/* ---- PASSO 5: SKUs (3 meses) ---- */
+/* ---- PASSO 5: SKUs (mês atual + anterior) ---- */
 function linhaSku(s, conf) {
   const tags = `${s[3] && s[3] !== 'Lono' ? `<span class="tag ok">${s[3]}</span>` : ''}${ehLono(s) ? '<span class="tag ok">Lono</span>' : ''}${s[2] ? '<span class="tag">estratégico</span>' : ''}`;
-  const meses = [[4, 2], [2, 1], [1, 0]].map(([bit, i]) => `<i class="mes ${s[4] & bit ? 'on' : ''}">${nomeMes(i)}</i>`).join('');
+  const meses = [[2, 1], [1, 0]].map(([bit, i]) => `<i class="mes ${s[4] & bit ? 'on' : ''}">${nomeMes(i)}</i>`).join('');
   return `<li class="sku">${imgProd([s[0]], s[1], 'mini')}<div style="flex:1"><span>${esc(s[1])} <small>${esc(s[0])}</small></span><div class="meses">${meses}${tags}</div>
     ${conf ? `<div class="item"><span>Ainda tem no estoque do PDV?</span>${radio('skusConf.' + s[0], [['S', 'Sim'], ['N', 'Não']])}</div>` : ''}</div></li>`;
 }
@@ -646,18 +656,18 @@ function pSkus() {
   const pendTot = todos.filter(s => !(s[4] & 1) && !conf[s[0]]).length;
   const painel = k => { const x = info(k), atual = x.t.filter(s => s[4] & 1);
     return `<div class="card segpainel"><div class="lin sp"><b>${k}</b><button class="btn peq" data-acao="segAbrir" data-v="">Fechar ✕</button></div>
-      ${x.ant.length ? `<small>Vendidos em ${nomeMes(2)}/${nomeMes(1)} e ainda não em ${nomeMes(0)} – ainda tem no PDV?</small>
+      ${x.ant.length ? `<small>Vendidos em ${nomeMes(1)} e ainda não em ${nomeMes(0)} – ainda tem no PDV?</small>
         <ul class="lista mini">${x.ant.map(s => linhaSku(s, true)).join('')}</ul>` : ''}
       ${atual.length ? `<small>Comprados em ${nomeMes(0)} (contam automático)</small><ul class="lista mini">${atual.map(s => linhaSku(s, false)).join('')}</ul>` : ''}
-      ${!x.t.length ? '<small>Nenhum SKU deste segmento nos últimos 3 meses.</small>' : ''}</div>`; };
+      ${!x.t.length ? '<small>Nenhum SKU deste segmento no mês atual nem no anterior.</small>' : ''}</div>`; };
   return `<div class="card destaque lin sp"><div><div class="big">${l.length}</div>SKUs presentes</div><div><div class="big">${tot}</div>vitoriosos</div></div>
     <div class="segs">${segs.map(k => { const x = info(k), n = k === 'Outros' ? x.pres : v[k].length;
       return `<button class="seg-t ${n ? 'ok' : 'falta'} ${ab === k ? 'aberto' : ''}" data-acao="segAbrir" data-v="${k}"><b>${n}</b>${k}
-        ${x.pend ? `<span class="badge">+${x.pend} ${nomeMes(2)}/${nomeMes(1)}</span>` : x.ant.length ? '<span class="badge ok">✔ conferido</span>' : ''}</button>`; }).join('')}</div>
+        ${x.pend ? `<span class="badge">+${x.pend} ${nomeMes(1)}</span>` : x.ant.length ? '<span class="badge ok">✔ conferido</span>' : ''}</button>`; }).join('')}</div>
     ${ab ? painel(ab) : ''}
-    ${pendTot ? `<div class="aviso alerta">Há <b>${pendTot}</b> SKU(s) vendidos nos meses anteriores para conferir. Toque nos segmentos com a etiqueta laranja.
+    ${pendTot ? `<div class="aviso alerta">Há <b>${pendTot}</b> SKU(s) vendidos em ${nomeMes(1)} para conferir. Toque nos segmentos com a etiqueta laranja.
       <div class="lin" style="margin-top:6px"><button class="btn peq" data-acao="skusTodos" data-v="S">Todos ainda têm</button><button class="btn peq" data-acao="skusTodos" data-v="N">Nenhum tem</button></div></div>`
-      : `<p class="dica">Considera ${nomeMes(2)}, ${nomeMes(1)} e ${nomeMes(0)}. Toque num segmento para ver os produtos.</p>`}
+      : `<p class="dica">Considera ${nomeMes(1)} (mês anterior) e ${nomeMes(0)}. Toque num segmento para ver os produtos.</p>`}
     ${texto('resumoSkus', 'Resumo do PDV com os SKUs vitoriosos presentes', 'Descreva os vitoriosos presentes e o que falta', true)}
     <button class="btn peq" data-acao="sugerir" data-k="resumoSkus" data-v="${esc(sugestao)}">✨ Preencher sugestão</button>`;
 }
@@ -795,7 +805,7 @@ function validar(i) {
   if (id === 'skus') {
     const pend = skusAConfirmar().filter(s => !(r.skusConf || {})[s[0]]).length;
     if (pend) { const sg = [...SEGMENTOS_VITORIOSOS, 'Outros'].filter(k => skusAConfirmar().some(x => doSeg(x, k) && !(r.skusConf || {})[x[0]]));
-      e.push(`Confira os ${pend} SKU(s) vendidos nos meses anteriores (toque em: ${sg.join(', ')})`); }
+      e.push(`Confira os ${pend} SKU(s) vendidos em ${nomeMes(1)} (toque em: ${sg.join(', ')})`); }
     if (!txt(r.resumoSkus)) e.push('Descreva o resumo dos SKUs vitoriosos');
   }
   if (id === 'obj') {

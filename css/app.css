@@ -122,3 +122,4 @@ li.sku .item{margin-top:4px}
 .segs .badge{display:block;margin-top:4px;font-size:.66rem;font-weight:700;background:var(--am2);color:var(--am);border-radius:8px;padding:2px 4px}
 .segs .badge.ok{background:var(--v2);color:var(--v)}
 .segpainel{border:2px solid var(--v)}.segpainel>small{display:block;margin:6px 0 2px;color:var(--sub)}
+.eq{font-size:.8rem;margin-left:5px;white-space:nowrap}
