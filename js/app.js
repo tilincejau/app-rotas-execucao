@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 34</p>
+    <p class="dica" style="text-align:center">versão 35</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -855,7 +855,7 @@ function espelhoVisita() {
     nota: notaPdv(resumoVisita()),
     fdsAnt: (x => ({ mes: nomeMes(1), pts: x.antPts, meta: x.meta, ok: x.antOk, total: x.total }))(fdsAntAtual(cod)),
     // FDS: [item, positivado(1/0), meta, pontos, produtos comprados no mês, visto no PDV(1/0)]
-    fds: (P.fds[cod] || []).map(x => [NOMES_FDS[x[0]] || x[0], x[1], x[2], x[3], (prods[x[0]] || []).map(p => p[1]).join('; '), r.fdsVisto[x[0]] ? 1 : 0]),
+    fds: (P.fds[cod] || []).map(x => [NOMES_FDS[x[0]] || x[0], x[1], x[2], x[3], (prods[x[0]] || []).map(p => p[1]).join('; '), r.fdsVisto[x[0]] ? 1 : 0, ((P.fdsAnt || {})[cod] || []).includes(x[0]) ? 1 : 0]),
     visib: { tabela: CANAL_PARA_VISIB[d.canal] || 'DEMAIS CANAIS', itens: itensVisib().map((x, i) => [x[0], x[1], r.visib[i] ? 1 : 0]) },
     ativos: temGeladeira()
       ? { gel: 1, geladeiras: (P.geladeiras[cod] || []).map(g => [g[0], g[2], g[3], g[6], g[7], g[11], g[9], g[10], g[8], diagGiro(g).rot]), perguntas: POSIC_GELADEIRA.map(([k, t, p]) => [t, sn(r.ativos[k]), r.ativos[k] === 'S' ? p : 0, p]),
