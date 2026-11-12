@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 29</p>
+    <p class="dica" style="text-align:center">versão 30</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -630,22 +630,34 @@ function linhaSku(s, conf) {
   return `<li class="sku">${imgProd([s[0]], s[1], 'mini')}<div style="flex:1"><span>${esc(s[1])} <small>${esc(s[0])}</small></span><div class="meses">${meses}${tags}</div>
     ${conf ? `<div class="item"><span>Ainda tem no estoque do PDV?</span>${radio('skusConf.' + s[0], [['S', 'Sim'], ['N', 'Não']])}</div>` : ''}</div></li>`;
 }
+const doSeg = (s, k) => k === 'Outros' ? !(s[3] && s[3] !== 'Lono') && !ehLono(s) : k === 'Lono' ? ehLono(s) : s[3] === k;
 function pSkus() {
-  const todos = skusHistPdv(), atual = todos.filter(s => s[4] & 1), conf = todos.filter(s => !(s[4] & 1)), r = R();
-  const l = skusDoPdv(), v = vitoriosos(), tot = l.filter(s => s[3] || ehLono(s)).length, pend = conf.filter(s => !(r.skusConf || {})[s[0]]).length;
+  if (S._segCod !== S.draft.cod) { S._segCod = S.draft.cod; S.segAberto = ''; }
+  const todos = skusHistPdv(), conf = (R().skusConf = R().skusConf || {}), l = skusDoPdv(), v = vitoriosos();
+  const tot = l.filter(s => s[3] || ehLono(s)).length, ab = S.segAberto;
+  const segs = SEGMENTOS_VITORIOSOS.concat(todos.some(s => doSeg(s, 'Outros')) ? ['Outros'] : []);
+  const info = k => { const t = todos.filter(s => doSeg(s, k)), ant = t.filter(s => !(s[4] & 1));
+    return { t, ant, pend: ant.filter(s => !conf[s[0]]).length, pres: t.filter(s => s[5]).length }; };
   const pres = SEGMENTOS_VITORIOSOS.filter(k => v[k].length), aus = SEGMENTOS_VITORIOSOS.filter(k => !v[k].length);
-  const semEst = conf.filter(s => (r.skusConf || {})[s[0]] === 'N' && (s[3] || ehLono(s) || s[2])).map(s => s[1]);
+  const semEst = todos.filter(s => !(s[4] & 1) && conf[s[0]] === 'N' && (s[3] || ehLono(s) || s[2])).map(s => s[1]);
   const sugestao = (pres.length ? 'Vitoriosos presentes: ' + pres.map(k => `${k} (${v[k].length})`).join(', ') + '.' : 'Nenhum SKU vitorioso presente.') +
     (aus.length ? ' Ausentes: ' + aus.join(', ') + '.' : ' Todos os segmentos presentes.') +
     (semEst.length ? ' Comprados antes e sem estoque hoje (reposição): ' + semEst.slice(0, 6).join(', ') + '.' : '');
+  const pendTot = todos.filter(s => !(s[4] & 1) && !conf[s[0]]).length;
+  const painel = k => { const x = info(k), atual = x.t.filter(s => s[4] & 1);
+    return `<div class="card segpainel"><div class="lin sp"><b>${k}</b><button class="btn peq" data-acao="segAbrir" data-v="">Fechar ✕</button></div>
+      ${x.ant.length ? `<small>Vendidos em ${nomeMes(2)}/${nomeMes(1)} e ainda não em ${nomeMes(0)} – ainda tem no PDV?</small>
+        <ul class="lista mini">${x.ant.map(s => linhaSku(s, true)).join('')}</ul>` : ''}
+      ${atual.length ? `<small>Comprados em ${nomeMes(0)} (contam automático)</small><ul class="lista mini">${atual.map(s => linhaSku(s, false)).join('')}</ul>` : ''}
+      ${!x.t.length ? '<small>Nenhum SKU deste segmento nos últimos 3 meses.</small>' : ''}</div>`; };
   return `<div class="card destaque lin sp"><div><div class="big">${l.length}</div>SKUs presentes</div><div><div class="big">${tot}</div>vitoriosos</div></div>
-    <div class="segs">${SEGMENTOS_VITORIOSOS.map(k => `<div class="${v[k].length ? 'ok' : 'falta'}"><b>${v[k].length}</b>${k}</div>`).join('')}</div>
-    <p class="dica">Considera os 3 últimos meses (${nomeMes(2)}, ${nomeMes(1)} e ${nomeMes(0)}). O que foi comprado em ${nomeMes(0)} conta como presente; o que foi comprado só antes, confirme se ainda está no estoque do PDV.</p>
-    ${conf.length ? `<div class="card"><div class="lin sp"><b>Comprados só em ${nomeMes(2)}/${nomeMes(1)} (${conf.length})</b>${pend ? `<span class="tag alerta">${pend} sem resposta</span>` : '<span class="tag ok">confirmado</span>'}</div>
-      <div class="lin"><button class="btn peq" data-acao="skusTodos" data-v="S">Todos Sim</button><button class="btn peq" data-acao="skusTodos" data-v="N">Todos Não</button></div>
-      <ul class="lista mini">${conf.map(s => linhaSku(s, true)).join('')}</ul></div>` : ''}
-    <details ${atual.length < 12 ? 'open' : ''}><summary>Comprados em ${nomeMes(0)} (${atual.length})</summary>
-      <ul class="lista mini">${atual.map(s => linhaSku(s, false)).join('')}</ul></details>
+    <div class="segs">${segs.map(k => { const x = info(k), n = k === 'Outros' ? x.pres : v[k].length;
+      return `<button class="seg-t ${n ? 'ok' : 'falta'} ${ab === k ? 'aberto' : ''}" data-acao="segAbrir" data-v="${k}"><b>${n}</b>${k}
+        ${x.pend ? `<span class="badge">+${x.pend} ${nomeMes(2)}/${nomeMes(1)}</span>` : x.ant.length ? '<span class="badge ok">✔ conferido</span>' : ''}</button>`; }).join('')}</div>
+    ${ab ? painel(ab) : ''}
+    ${pendTot ? `<div class="aviso alerta">Há <b>${pendTot}</b> SKU(s) vendidos nos meses anteriores para conferir. Toque nos segmentos com a etiqueta laranja.
+      <div class="lin" style="margin-top:6px"><button class="btn peq" data-acao="skusTodos" data-v="S">Todos ainda têm</button><button class="btn peq" data-acao="skusTodos" data-v="N">Nenhum tem</button></div></div>`
+      : `<p class="dica">Considera ${nomeMes(2)}, ${nomeMes(1)} e ${nomeMes(0)}. Toque num segmento para ver os produtos.</p>`}
     ${texto('resumoSkus', 'Resumo do PDV com os SKUs vitoriosos presentes', 'Descreva os vitoriosos presentes e o que falta', true)}
     <button class="btn peq" data-acao="sugerir" data-k="resumoSkus" data-v="${esc(sugestao)}">✨ Preencher sugestão</button>`;
 }
@@ -782,7 +794,8 @@ function validar(i) {
   }
   if (id === 'skus') {
     const pend = skusAConfirmar().filter(s => !(r.skusConf || {})[s[0]]).length;
-    if (pend) e.push(`Confirme se ainda tem no estoque os ${pend} SKU(s) comprados nos meses anteriores`);
+    if (pend) { const sg = [...SEGMENTOS_VITORIOSOS, 'Outros'].filter(k => skusAConfirmar().some(x => doSeg(x, k) && !(r.skusConf || {})[x[0]]));
+      e.push(`Confira os ${pend} SKU(s) vendidos nos meses anteriores (toque em: ${sg.join(', ')})`); }
     if (!txt(r.resumoSkus)) e.push('Descreva o resumo dos SKUs vitoriosos');
   }
   if (id === 'obj') {
@@ -914,6 +927,7 @@ document.addEventListener('click', async e => {
       const k = el.dataset.k, at = getPath(R(), k) || '';
       if (!v || at.includes(v)) return;
       setPath(R(), k, at.trim() ? at.trimEnd() + '\n' + v : v); salvarRascunho(); break; }
+    case 'segAbrir': S.segAberto = S.segAberto === v ? '' : v; break;
     case 'skusTodos': { const r = R(); r.skusConf = r.skusConf || {}; skusAConfirmar().forEach(x => r.skusConf[x[0]] = v); salvarRascunho(); break; }
     case 'sync': sincronizar(true); return;
     case 'sair': return sair();

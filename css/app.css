@@ -117,3 +117,8 @@ details{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:8p
 .mes{font-style:normal;font-size:.68rem;padding:1px 6px;border-radius:6px;background:var(--cz);color:#aaa;text-decoration:line-through}
 .mes.on{background:var(--v2);color:var(--v);text-decoration:none;font-weight:700}
 li.sku .item{margin-top:4px}
+.segs .seg-t{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:8px 4px;text-align:center;font-size:.8rem;font:inherit;font-size:.8rem;color:var(--tx);cursor:pointer;position:relative}
+.segs .seg-t.aberto{border:2px solid var(--v);background:var(--v2)}
+.segs .badge{display:block;margin-top:4px;font-size:.66rem;font-weight:700;background:var(--am2);color:var(--am);border-radius:8px;padding:2px 4px}
+.segs .badge.ok{background:var(--v2);color:var(--v)}
+.segpainel{border:2px solid var(--v)}.segpainel>small{display:block;margin:6px 0 2px;color:var(--sub)}
