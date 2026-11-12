@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 32</p>
+    <p class="dica" style="text-align:center">versão 33</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -473,15 +473,20 @@ function statusGiroGel() { // pior status entre as geladeiras do PDV
 const giroRuim = () => /zero|baixo/i.test(statusGiroGel());
 // Histórico de giro (3 meses) de cada equipamento: a[7] atual, a[8] mês anterior, a[9] retrasado · a[6], a[10], a[11] = giro HL
 const ruimG = st => /zero|baixo/i.test(st || ''), okG = st => /ok/i.test(st || ''), zeroG = st => /zero/i.test(st || '');
+// Diagnóstico pelos meses FECHADOS (anterior e retrasado). O mês atual é parcial: não conta como queda, é o alvo do plano.
 function diagGiro(a) {
   const s0 = a[7], s1 = a[8], s2 = a[9];
-  if (!s0 && !s1 && !s2) return { tipo: 'sem', rot: 'Sem dado de giro', plano: false };
-  if (zeroG(s0) && zeroG(s1) && zeroG(s2)) return { tipo: 'recolher', rot: 'Giro zero nos 3 meses', plano: true };
-  if (!ruimG(s0)) return { tipo: 'ok', rot: okG(s0) ? 'Giro OK' : (s0 || 'Sem dado'), plano: false };
-  if (okG(s1) && okG(s2)) return { tipo: 'acompanhar', rot: 'Vem batendo a meta – acompanhar', plano: false };
-  if (ruimG(s1) && ruimG(s2)) return { tipo: 'critico', rot: 'Abaixo da meta há 3 meses', plano: true };
-  if (ruimG(s1)) return { tipo: 'queda', rot: 'Caiu nos últimos 2 meses', plano: true };
-  return { tipo: 'oscila', rot: 'Giro oscilando', plano: true };
+  if (!s1 && !s2) return s0 ? { tipo: 'semhist', rot: 'Sem histórico – acompanhar', plano: false } : { tipo: 'sem', rot: 'Sem dado de giro', plano: false };
+  if (zeroG(s1) && zeroG(s2) && !(Number(a[6]) > 0)) return { tipo: 'recolher', rot: 'Giro zero nos meses fechados', plano: true };
+  if (okG(s1) && (okG(s2) || !s2)) return { tipo: 'acompanhar', rot: 'Vem batendo a meta – acompanhar', plano: false };
+  if (okG(s1)) return { tipo: 'recuperou', rot: `Recuperou em ${nomeMes(1)} – manter`, plano: false };
+  if (ruimG(s1) && ruimG(s2)) return { tipo: 'critico', rot: `Abaixo da meta em ${nomeMes(2)} e ${nomeMes(1)}`, plano: true };
+  return { tipo: 'queda', rot: `Caiu em ${nomeMes(1)} – recuperar em ${nomeMes(0)}`, plano: true };
+}
+// Ritmo do mês atual: giro parcial até hoje projetado para o mês inteiro
+function ritmoMes(g) {
+  const h = new Date(), dia = h.getDate(), dias = new Date(h.getFullYear(), h.getMonth() + 1, 0).getDate();
+  return Number(g) > 0 ? Number(g) / dia * dias : 0;
 }
 function equipAtivos() { // equipamentos considerados na análise de giro
   const P = S.pacote, cod = S.draft.cod;
@@ -492,14 +497,15 @@ const precisaPlanoGiro = () => equipAtivos().some(([, a]) => diagGiro(a).plano);
 function sugestaoPlanoGiro() {
   const dia = new Date().getDate(), m0 = nomeMes(0), m1 = nomeMes(1), m2 = nomeMes(2), out = [];
   equipAtivos().forEach(([tp, a]) => {
-    const d = diagGiro(a), nm = `${tp} ${a[0]}`;
-    if (d.tipo === 'recolher') out.push(`${nm}: giro zero em ${m2}, ${m1} e ${m0}. Avaliar recolhimento/remanejamento para um PDV com potencial; antes, confirmar com o PDV se há interesse em retomar a compra.`);
-    if (d.tipo === 'critico') out.push(`${nm}: abaixo da meta há 3 meses (${m2} ${a[9]}, ${m1} ${a[8]}, ${m0} ${a[7]}). Plano de recuperação: combinar pedido de ___ cx, positivar ___, revisar preço e abastecimento; reavaliar em 30 dias e, se não reagir, remanejar o equipamento.`);
-    if (d.tipo === 'queda') out.push(`${nm}: estava OK em ${m2} e caiu em ${m1} e ${m0}. Entender o motivo (concorrência, preço, ruptura, sazonalidade) e combinar pedido de ___ cx para voltar à meta.`);
-    if (d.tipo === 'oscila') out.push(`${nm}: giro oscilando (${m2} ${a[9]}, ${m1} ${a[8]}, ${m0} ${a[7]}). Garantir frequência de pedido (semanal) com ___ para estabilizar.`);
-    if (d.tipo === 'acompanhar') out.push(`${nm}: PDV vem batendo a meta mês a mês (${m2} e ${m1} OK); ainda estamos no início do mês (dia ${dia}) – acompanhar o giro até o fechamento.`);
+    const d = diagGiro(a), nm = `${tp} ${a[0]}`, proj = ritmoMes(a[6]);
+    const parcial = `${m0} até o dia ${dia}: ${n2(a[6])}${proj ? ` (no ritmo atual fecharia ~${n2(proj)}; ${m1} fechou ${n2(a[10])})` : ''}`;
+    if (d.tipo === 'recolher') out.push(`${nm}: giro zero em ${m2} e ${m1} e nada em ${m0} até agora. Confirmar com o PDV se há interesse em retomar a compra; se não houver, recolher/remanejar para um PDV com potencial.`);
+    if (d.tipo === 'critico') out.push(`${nm}: abaixo da meta em ${m2} (${n2(a[11])}) e ${m1} (${n2(a[10])}). ${parcial}. Plano para bater a meta em ${m0}: pedido de ___ cx, positivar ___, revisar preço e abastecimento; se não reagir até o fechamento, avaliar remanejamento.`);
+    if (d.tipo === 'queda') out.push(`${nm}: ${m2} OK (${n2(a[11])}) e caiu em ${m1} (${n2(a[10])}). ${parcial}. Plano para voltar à meta em ${m0}: entender o motivo (concorrência, preço, ruptura) e combinar pedido de ___ cx.`);
+    if (d.tipo === 'recuperou') out.push(`${nm}: recuperou em ${m1} (${n2(a[10])}) depois de ${m2} abaixo. ${parcial}. Manter a frequência de pedido para não voltar a cair.`);
+    if (d.tipo === 'acompanhar') out.push(`${nm}: PDV vem batendo a meta mês a mês (${m2} e ${m1} OK); ${m0} ainda está em andamento (dia ${dia}) – acompanhar o giro até o fechamento.`);
   });
-  return [...new Set(out)].join('\n'); // mesmo material repetido entra uma vez só
+  return [...new Set(out)].join('\n');
 }
 function calcAtivos() {
   const a = R().ativos;
@@ -582,8 +588,8 @@ function pVisib() {
 }
 /* ---- PASSO 3: ATIVOS ---- */
 function histGiro(a) {
-  const d = diagGiro(a), cel = (m, g, st) => `<span>${m}<b>${g === '' || g == null ? '–' : n2(g)}</b><i class="${ruimG(st) ? 'erro' : okG(st) ? 'sobe' : ''}">${esc(st || '–')}</i></span>`;
-  return `<div class="hist"><small>Giro HL – últimos 3 meses</small><div class="grid3">${cel(nomeMes(2), a[11], a[9])}${cel(nomeMes(1), a[10], a[8])}${cel(nomeMes(0) + ' (atual)', a[6], a[7])}</div>
+  const d = diagGiro(a), cel = (m, g, st, parcial) => `<span>${m}<b>${g === '' || g == null ? '–' : n2(g)}</b><i class="${parcial ? '' : ruimG(st) ? 'erro' : okG(st) ? 'sobe' : ''}">${esc(st || '–')}</i></span>`;
+  return `<div class="hist"><small>Giro HL – últimos 3 meses (${nomeMes(0)} ainda em andamento, não conta como queda)</small><div class="grid3">${cel(nomeMes(2), a[11], a[9])}${cel(nomeMes(1), a[10], a[8])}${cel(nomeMes(0) + ' (parcial)', a[6], a[7], 1)}</div>
     <span class="tag ${d.plano ? 'alerta' : d.tipo === 'ok' || d.tipo === 'acompanhar' ? 'ok' : ''}">${esc(d.rot)}${d.plano ? ' · precisa de plano' : ''}</span></div>`;
 }
 function tabelaAtivos(titulo, l, extra) {
@@ -612,8 +618,8 @@ function pAtivos() {
         <div class="lin sp" style="margin-top:8px"><span>Pontuação</span><span class="pts">${calcAtivos()}/100</span></div></div>`}
     ${outros ? `<h3>Outros equipamentos em comodato</h3>${tabelaAtivos('🍺 Chopeiras / outros', P.chopeiras[cod])}${tabelaAtivos('📦 Vasilhames', P.vasilhames[cod])}` : ''}
     ${equipAtivos().length ? `<div class="card"><b>Plano de ação do giro</b>
-      ${precisaPlanoGiro() ? '<div class="aviso alerta">Há equipamento com giro abaixo da meta sem histórico bom nos meses anteriores: o plano é obrigatório.</div>'
-        : '<small>Nenhum equipamento precisa de plano (giro OK ou vem batendo a meta nos meses anteriores). Opcional.</small>'}
+      ${precisaPlanoGiro() ? '<div class="aviso alerta">Há equipamento que não bateu a meta no mês anterior: o plano para recuperar neste mês é obrigatório.</div>'
+        : '<small>Nenhum equipamento precisa de plano (bateu a meta no mês anterior). Opcional.</small>'}
       ${texto('ativos.planoGiro', 'Plano de ação / acompanhamento', 'Toque em ✨ para preencher pelo histórico e complete os ___', precisaPlanoGiro())}
       <button class="btn peq" data-acao="sugerir" data-k="ativos.planoGiro" data-v="${esc(sugestaoPlanoGiro())}">✨ Sugerir pelo histórico de giro</button></div>` : ''}
     ${texto('ativos.obs', 'Observação dos ativos', 'Ex.: geladeira com concorrente, vasilhame parado, chopeira sem uso...')}`;
