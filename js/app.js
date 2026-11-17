@@ -6,7 +6,7 @@ const S = {
   draft: null, passo: 0, msg: null, sincronizando: false
 };
 const $app = document.getElementById('app');
-const mesAtual = () => new Date().toISOString().slice(0, 7);
+const mesAtual = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }; // data local do celular (não UTC)
 const hoje = () => new Date().toLocaleDateString('pt-BR');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const n2 = v => (v == null || v === '' ? '–' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 35</p>
+    <p class="dica" style="text-align:center">versão 36</p>
   </section>`;
 }
 async function fazerLogin(form) {
