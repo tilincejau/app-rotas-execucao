@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 36</p>
+    <p class="dica" style="text-align:center">versão 37</p>
   </section>`;
 }
 async function fazerLogin(form) {
