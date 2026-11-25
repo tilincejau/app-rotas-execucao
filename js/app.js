@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 38</p>
+    <p class="dica" style="text-align:center">versão 39</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -705,7 +705,7 @@ function sugestaoAlavancas() {
 }
 function blocoFortesOport(req) {
   return `${texto('fortes', 'Pontos fortes', 'O que o PDV / vendedor faz bem', true)}
-    ${texto('oport', 'Oportunidades', 'O que precisa melhorar', req)}
+    ${texto('oport', 'Oportunidades', 'O que precisa melhorar', true)}
     <button class="btn peq" data-acao="sugerir" data-k="oport" data-v="${esc(sugestaoOport())}">✨ Sugerir oportunidades a partir da visita</button>`;
 }
 function pObj() {
@@ -836,7 +836,7 @@ function validar(i) {
       if (!r.rgb.concNA && r.rgb.marcaConc === 'Outra' && !(r.rgb.marcaConcOutra || '').trim()) e.push('Digite qual é a marca do concorrente');
       if ((o.id === 'RGB_QUEDA' || r.rgb.tipo === 'Maiores quedas') && (!r.rgb.motivo || !txt(r.rgb.acao, 5))) e.push('Informe motivo da queda e ação');
     }
-    if (o.bloco !== 'coaching' && o.bloco !== 'trade' && !txt(r.fortes)) e.push('Descreva os pontos fortes');   // obrigatório em todas as visitas
+    if (o.bloco !== 'coaching' && o.bloco !== 'trade') fo();   // pontos fortes e oportunidades: obrigatórios em todas as visitas
     if (o.bloco === 'rota' && !r.rota.seguiuPlano) e.push('Informe se a visita seguiu o planejamento do vendedor');
     if (o.bloco === 'trade') {
       if (!txt(r.trade.alavancasTexto)) e.push('Descreva as alavancas trabalhadas neste PDV');
