@@ -1,7 +1,7 @@
 // Service worker: guarda o app no aparelho para abrir sem internet.
 // Com internet: sempre busca a versão mais nova no GitHub (e atualiza a cópia).
 // Sem internet: usa a cópia guardada.
-const VERSAO = 'rotas-v37';
+const VERSAO = 'rotas-v38';
 const ARQUIVOS = ['./', 'index.html', 'css/app.css', 'js/config.js', 'js/regras.js', 'js/db.js', 'js/rota.js', 'js/app.js',
   'manifest.webmanifest', 'img/icone-192.png', 'img/icone-512.png', 'img/apple-touch-icon.png', 'img/icon.svg', 'img/logo.png'];
 

@@ -191,7 +191,7 @@ function tLogin() {
       <button class="btn pri" type="submit">Entrar</button>
     </form>
     <p class="dica">No primeiro acesso é preciso internet para baixar sua base. Depois o app funciona sem sinal.</p>
-    <p class="dica" style="text-align:center">versão 37</p>
+    <p class="dica" style="text-align:center">versão 38</p>
   </section>`;
 }
 async function fazerLogin(form) {
@@ -286,7 +286,7 @@ function nomeMes(voltar) { // 0 = mês atual da base, 1 = anterior, 2 = retrasad
 }
 const volDe = cod => (S.pacote.vol && S.pacote.vol[cod]) || [0, 0, 0, 0, 0, 0];
 const shareRgb = (r, d) => r + d ? Math.round(r / (r + d) * 1000) / 10 : 0;
-const ORDENS_RGB = [['pot', 'Potencial RGB (volume descartável)'], ['rgb', 'Volume RGB'], ['total', 'Volume total'], ['share', 'Share RGB %'], ['queda', 'Queda RGB']];
+const ORDENS_RGB = [['pot', 'Potencial Descartável'], ['rgb', 'Volume RGB'], ['total', 'Volume total'], ['share', 'Share RGB %'], ['queda', 'Queda RGB']];
 // Por que o PDV entra no foco RGB (automático):
 //  não comprador = comprou RGB nos meses anteriores e não comprou neste · queda = mês anterior < retrasado · senão maiores clientes
 function tipoRgbAuto(cod) {
@@ -704,7 +704,7 @@ function sugestaoAlavancas() {
   return out.join('. ') + '.';
 }
 function blocoFortesOport(req) {
-  return `${texto('fortes', 'Pontos fortes', 'O que o PDV / vendedor faz bem', req)}
+  return `${texto('fortes', 'Pontos fortes', 'O que o PDV / vendedor faz bem', true)}
     ${texto('oport', 'Oportunidades', 'O que precisa melhorar', req)}
     <button class="btn peq" data-acao="sugerir" data-k="oport" data-v="${esc(sugestaoOport())}">✨ Sugerir oportunidades a partir da visita</button>`;
 }
@@ -836,6 +836,7 @@ function validar(i) {
       if (!r.rgb.concNA && r.rgb.marcaConc === 'Outra' && !(r.rgb.marcaConcOutra || '').trim()) e.push('Digite qual é a marca do concorrente');
       if ((o.id === 'RGB_QUEDA' || r.rgb.tipo === 'Maiores quedas') && (!r.rgb.motivo || !txt(r.rgb.acao, 5))) e.push('Informe motivo da queda e ação');
     }
+    if (o.bloco !== 'coaching' && o.bloco !== 'trade' && !txt(r.fortes)) e.push('Descreva os pontos fortes');   // obrigatório em todas as visitas
     if (o.bloco === 'rota' && !r.rota.seguiuPlano) e.push('Informe se a visita seguiu o planejamento do vendedor');
     if (o.bloco === 'trade') {
       if (!txt(r.trade.alavancasTexto)) e.push('Descreva as alavancas trabalhadas neste PDV');
